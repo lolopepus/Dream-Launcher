@@ -1,7 +1,7 @@
 {
   "name": "dream-launcher",
   "productName": "Dream Launcher",
-  "version": "2.3.0",
+  "version": "2.3.1",
   "description": "A controller-friendly launcher for all your PC games, storefronts and emulators.",
   "main": "src/main/main.js",
   "updateRepo": "lolopepus/Dream-Launcher",

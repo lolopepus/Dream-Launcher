@@ -43,7 +43,7 @@
       run: () => DL.keysTip.open({ fromStart: true, preview: true }),
     },
     {
-      label: 'Show API keys reminder again', icon: 'refresh', desc: 'Forgets "Later" and "Don\'t show again", so it can appear at the next start.',
+      label: 'Show API keys reminder again', icon: 'refresh', desc: 'Forgets "Don\'t show again", so it appears again at the next start.',
       run: () => { DL.keysTip.reset(); DL.toast({ title: 'API keys reminder reset', icon: 'check', tone: 'good' }); },
     },
     {

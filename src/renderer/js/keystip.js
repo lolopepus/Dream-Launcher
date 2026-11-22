@@ -1,8 +1,8 @@
 /*
  * Dream Launcher - "Best experience with API keys": explains what each free key adds
  * (Steam Web API, SteamGridDB, OpenXBL) and leads to Options › Accounts & artwork.
- * Shown once after start-up while a useful key is missing; "Later" asks again in a week,
- * "Don't show again" never. It can always be opened from Options › Accounts & artwork.
+ * Shown after every start while a key is missing; "Later" closes it until the next start,
+ * "Don't show again" turns it off for good. It can always be opened from Options › Accounts & artwork.
  */
 (function () {
   'use strict';
@@ -10,7 +10,6 @@
   const { el } = DL;
 
   const STORE_KEY = 'dl.keysTip';
-  const LATER_MS = 7 * 24 * 3600 * 1000;
   const t = (k, p) => DL.t(k, p);
 
   function readState() {
@@ -20,23 +19,21 @@
     try { localStorage.setItem(STORE_KEY, JSON.stringify(v)); } catch { /* not kept */ }
   }
 
-  /** The keys worth having for this library, and whether each is set. */
+  /** The three keys and whether each is set. */
   function keys() {
     const sec = (DL.state.settings && DL.state.settings.secrets) || {};
-    const games = DL.state.games || [];
-    const has = (src) => games.some((g) => g.source === src);
     const list = [
       {
         id: 'steam', title: t('keysTip.steamTitle'), text: t('keysTip.steamText'), icon: 'trophy',
-        set: !!sec.steamApiKey, useful: has('steam'),
+        set: !!sec.steamApiKey,
       },
       {
         id: 'sgdb', title: t('keysTip.sgdbTitle'), text: t('keysTip.sgdbText'), icon: 'image',
-        set: !!sec.sgdbApiKey, useful: games.some((g) => g.source !== 'steam') || !games.length,
+        set: !!sec.sgdbApiKey,
       },
       {
         id: 'xbox', title: t('keysTip.xboxTitle'), text: t('keysTip.xboxText'), icon: 'controller',
-        set: !!sec.xblApiKey, useful: has('xbox'),
+        set: !!sec.xblApiKey,
       },
     ];
     return list;
@@ -52,10 +49,8 @@
     let sheet;
     const close = (how) => {
       if (fromStart && !preview) {
-        const st = readState();
-        if (how === 'never') st.never = true;
-        else st.laterUntil = Date.now() + LATER_MS;
-        writeState(st);
+        // "Later" only closes it (it comes back at the next start); "Don't show again" is kept.
+        if (how === 'never') writeState({ ...readState(), never: true });
       }
       sheet.close(how === 'setup');
     };
@@ -94,21 +89,17 @@
   }
 
   /**
-   * After start-up: shows the tip if a useful key is missing, once the home screen is idle
-   * (no other window open). Not while offline: the keys only matter online.
+   * After start-up: shows the tip on every start (the first one included) until "Don't show
+   * again" was chosen, unless all three keys are already set. It waits until the home screen is
+   * free (no other window open, no game running) and then appears.
    */
   function maybeShow() {
-    const st = readState();
-    if (st.never || (st.laterUntil && Date.now() < st.laterUntil)) return;
-    let tries = 0;
+    if (readState().never) return;
     const attempt = () => {
-      tries++;
-      if (DL.state.net && DL.state.net.online === false) return;
-      const missing = keys().filter((k) => k.useful && !k.set);
-      if (!missing.length) return;
+      if (readState().never || !keys().some((k) => !k.set)) return;
       const top = DL.nav.top();
       const idle = top && top.id === 'dashboard' && !(DL.hub && DL.hub.isOpen()) && !DL.state.gameRunning;
-      if (!idle) { if (tries < 6) setTimeout(attempt, 20000); return; }
+      if (!idle) { setTimeout(attempt, 3000); return; }
       open({ fromStart: true });
     };
     setTimeout(attempt, 2500);
