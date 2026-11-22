@@ -139,10 +139,10 @@
 /* cards (library, search) */
 .card-grid {
   flex: 1; min-height: 0; overflow-y: auto;
-  display: grid; grid-template-columns: repeat(auto-fill, 188px); gap: 26px 24px; align-content: start; justify-content: space-between;
+  display: grid; grid-template-columns: repeat(auto-fill, 188px); gap: 26px 24px; align-content: start; align-items: start; justify-content: space-between;
   padding: 10px 8px 40px;
 }
-.card { width: 188px; position: relative; display: block; }
+.card { width: 188px; position: relative; display: block; align-self: start; text-align: left; }
 .card-art {
   width: 188px; height: 282px; border-radius: 20px; overflow: hidden; position: relative;
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
@@ -151,10 +151,11 @@
 .card-art img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .card-art.contain img { object-fit: contain; padding: 14%; background: rgba(0, 0, 0, 0.25); }
 .card-fallback { position: absolute; inset: 0; display: flex; align-items: flex-end; padding: 14px; font-size: 18px; font-weight: 800; line-height: 1.1; overflow-wrap: anywhere; }
-.card-badges { position: absolute; left: 10px; top: 10px; right: 40px; display: flex; gap: 5px; flex-wrap: wrap; }
-.card-fav { position: absolute; right: 10px; top: 10px; width: 26px; height: 26px; color: #ffd60a; filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5)); }
+.card-badges { position: absolute; left: 10px; top: 10px; right: 40px; display: flex; gap: 5px; flex-wrap: wrap; z-index: 2; }
+.card-fav { position: absolute; z-index: 2; right: 10px; top: 10px; width: 26px; height: 26px; color: #ffd60a; filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5)); }
 .card-fav svg { width: 100%; height: 100%; }
-.card-name { font-size: 15px; font-weight: 600; margin-top: 10px; color: rgba(255, 255, 255, 0.85); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.3; }
+/* Always room for two lines, so every card in a row is the same height and covers line up. */
+.card-name { font-size: 15px; font-weight: 600; margin-top: 10px; color: rgba(255, 255, 255, 0.85); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.3; height: 2.6em; overflow-wrap: anywhere; }
 .card:hover .card-art { transform: translateY(-3px); }
 .card.is-focused .card-art { transform: scale(1.05); box-shadow: 0 0 0 4px #fff, 0 20px 46px rgba(0, 0, 0, 0.5); }
 .card.is-focused .card-name { color: #fff; }
@@ -284,11 +285,39 @@
 .friends-summary b { font-size: 24px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .friends-summary span { font-size: 13px; color: rgba(255, 255, 255, 0.62); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-/* screenshots gallery and viewer */
-.gallery-grid { flex: 1; min-height: 0; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 20px; align-content: start; padding: 8px 8px 30px; }
-.gallery-item { position: relative; aspect-ratio: 16 / 9; border-radius: 18px; overflow: hidden; background: rgba(255, 255, 255, 0.08); transition: transform 0.18s var(--ease), box-shadow 0.18s ease; }
-.gallery-item img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-.gallery-item.is-focused { transform: scale(1.04); box-shadow: 0 0 0 4px #fff, 0 18px 40px rgba(0, 0, 0, 0.5); }
+/* screenshots & clips: gallery */
+.gallery-chips { flex: none; margin: 0 12px 14px; }
+.gallery-grid {
+  flex: 1; min-height: 0; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+  grid-auto-rows: max-content; gap: 20px; align-content: start; padding: 12px 12px 30px;
+}
+/* A tile's height comes from its 16:9 frame (a normal box inside it), so rows can't be squashed
+   and tiles never overlap, however many there are. */
+.gallery-item {
+  position: relative; display: block; align-self: start; width: 100%; padding: 0; border-radius: 18px; overflow: hidden;
+  background: rgba(255, 255, 255, 0.08); transition: transform 0.18s var(--ease), box-shadow 0.18s ease;
+}
+.gallery-frame { position: relative; display: block; width: 100%; aspect-ratio: 16 / 9; }
+.gallery-frame img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.gallery-item.is-focused { transform: scale(1.04); box-shadow: 0 0 0 4px #fff, 0 18px 40px rgba(0, 0, 0, 0.5); z-index: 1; }
+
+/* screenshot / clip pictures (hub card and gallery) */
+.media-noimg { position: absolute; inset: 0; display: grid; place-items: center; background: linear-gradient(135deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.03)); }
+.media-noimg svg { width: 44px; height: 44px; opacity: 0.45; }
+.media-play {
+  position: absolute; left: 50%; top: 50%; width: 58px; height: 58px; margin: -29px 0 0 -29px; border-radius: 50%;
+  display: grid; place-items: center; background: rgba(0, 0, 0, 0.45); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.8); pointer-events: none;
+}
+.media-play svg { width: 24px; height: 24px; margin-left: 3px; }
+.shot .media-play { width: 44px; height: 44px; margin: -22px 0 0 -22px; }
+.shot .media-play svg { width: 18px; height: 18px; margin-left: 2px; }
+.media-len {
+  position: absolute; right: 10px; bottom: 10px; padding: 3px 9px; border-radius: 999px; background: rgba(0, 0, 0, 0.62);
+  font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; pointer-events: none;
+}
+
+/* viewer (screenshots and clips) */
 .sheet.viewer { left: 0; right: 0; top: 0; bottom: 0; width: auto; max-height: none; margin-left: 0; border-radius: 0; padding: 34px 48px 26px; background: rgba(4, 5, 12, 0.94); }
 .sheet.viewer .sheet-head { margin-bottom: 14px; }
 .sheet.viewer .sheet-title { font-size: 28px; }
@@ -305,6 +334,44 @@
 .viewer-nav:hover { background: rgba(255, 255, 255, 0.24); }
 .viewer-nav.is-focused { background: rgba(255, 255, 255, 0.14); }
 .viewer-info { flex: none; text-align: center; margin-top: 16px; font-size: 17px; color: rgba(255, 255, 255, 0.7); font-variant-numeric: tabular-nums; }
+.viewer-video {
+  position: absolute; inset: 0; margin: auto; width: calc(100% - 170px); height: 100%; display: none; object-fit: contain;
+  background: transparent; outline: none;
+}
+.viewer-stage.is-clip .viewer-img { display: none; }
+.viewer-stage.is-clip .viewer-video { display: block; }
+.clip-bigplay {
+  display: none; position: absolute; left: 50%; top: 50%; width: 112px; height: 112px; margin: -56px 0 0 -56px; border-radius: 50%;
+  place-items: center; background: rgba(0, 0, 0, 0.45); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+  box-shadow: inset 0 0 0 3px rgba(255, 255, 255, 0.85); cursor: pointer;
+}
+.clip-bigplay svg { width: 46px; height: 46px; margin-left: 6px; }
+.viewer-stage.is-clip.clip-paused .clip-bigplay { display: grid; }
+.clip-spinner {
+  display: none; position: absolute; left: 50%; top: 50%; width: 64px; height: 64px; margin: -32px 0 0 -32px; border-radius: 50%;
+  border: 5px solid rgba(255, 255, 255, 0.18); border-top-color: #fff; animation: spin 0.9s linear infinite; pointer-events: none;
+}
+.viewer-stage.is-clip.clip-loading .clip-spinner, .viewer-stage.is-clip.clip-waiting .clip-spinner { display: block; }
+.clip-msg {
+  display: none; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(680px, calc(100% - 200px));
+  text-align: center; font-size: 20px; line-height: 1.45; color: rgba(255, 255, 255, 0.88); background: rgba(255, 255, 255, 0.08);
+  border-radius: 24px; padding: 26px 32px;
+}
+.viewer-stage.clip-error .clip-msg { display: block; }
+.viewer-stage.clip-error .clip-bigplay, .viewer-stage.clip-error .clip-spinner, .viewer-stage.clip-error .viewer-video { display: none; }
+.clip-bar { display: none; flex: none; align-items: center; gap: 16px; width: min(1100px, calc(100% - 170px)); margin: 16px auto 0; }
+.viewer-stage.is-clip + .clip-bar { display: flex; }
+.viewer-stage.clip-error + .clip-bar { visibility: hidden; }
+.clip-btn { flex: none; width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; background: rgba(255, 255, 255, 0.14); transition: background 0.15s ease; }
+.clip-btn:hover { background: rgba(255, 255, 255, 0.24); }
+.clip-btn svg { width: 20px; height: 20px; }
+.clip-time { flex: none; min-width: 56px; text-align: center; font-size: 16px; color: rgba(255, 255, 255, 0.8); font-variant-numeric: tabular-nums; }
+.clip-track { position: relative; flex: 1; height: 8px; border-radius: 999px; background: rgba(255, 255, 255, 0.16); cursor: pointer; }
+.clip-track::before { content: ''; position: absolute; left: 0; right: 0; top: -12px; bottom: -12px; }
+.clip-buf, .clip-pos { position: absolute; left: 0; top: 0; bottom: 0; width: 0; border-radius: inherit; pointer-events: none; }
+.clip-buf { background: rgba(255, 255, 255, 0.26); }
+.clip-pos { background: #fff; }
+.clip-pos::after { content: ''; position: absolute; right: -8px; top: 50%; width: 16px; height: 16px; margin-top: -8px; border-radius: 50%; background: #fff; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45); }
 
 /* ------------------------------------------------------------------ connection panel (Wi-Fi button) */
 .net-hero { display: flex; gap: 20px; align-items: center; padding: 22px 24px; border-radius: 26px; margin-bottom: 16px; flex: none; }
@@ -334,3 +401,31 @@
 /* gamerscore next to an Xbox achievement */
 .ach-gs-pill { font-size: 13px; font-weight: 700; padding: 3px 9px; border-radius: 10px; background: rgba(255, 255, 255, 0.1); }
 .ach-row.is-focused .ach-gs-pill { background: rgba(11, 13, 26, 0.1); }
+
+/* ------------------------------------------------------------------ API keys explanation */
+.sheet.dialog.keys-tip { width: 980px; margin-left: -490px; }
+.keys-cards { display: flex; flex-direction: column; gap: 12px; margin: 4px 0 14px; }
+.keys-card { display: flex; gap: 18px; align-items: flex-start; padding: 18px 20px; border-radius: 22px; background: rgba(255, 255, 255, 0.07); }
+.keys-ic { flex: none; width: 48px; height: 48px; border-radius: 15px; display: grid; place-items: center; background: rgba(255, 255, 255, 0.1); }
+.keys-ic svg { width: 26px; height: 26px; }
+.keys-card.is-set .keys-ic { background: rgba(52, 199, 89, 0.22); color: #7ee29b; }
+.keys-text { min-width: 0; flex: 1; }
+.keys-title { display: flex; align-items: center; gap: 12px; font-size: 20px; }
+.keys-text p { margin: 5px 0 0; font-size: 16px; line-height: 1.45; color: rgba(255, 255, 255, 0.72); }
+.keys-pill { font-size: 13px; font-weight: 700; padding: 3px 10px; border-radius: 999px; background: rgba(255, 255, 255, 0.12); color: rgba(255, 255, 255, 0.75); }
+.keys-pill.set { background: rgba(52, 199, 89, 0.25); color: #9cf0b3; }
+.keys-note { margin: 0 0 10px; font-size: 15px; color: rgba(255, 255, 255, 0.6); line-height: 1.45; }
+
+/* ------------------------------------------------------------------ debug menu (type "debug" in the search) */
+.debug-head { grid-column: 1 / -1; font-size: 15px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(255, 255, 255, 0.55); }
+.debug-item {
+  grid-column: span 2; display: flex; gap: 16px; align-items: center; text-align: left; padding: 18px 20px; border-radius: 20px;
+  background: rgba(255, 255, 255, 0.07); transition: transform 0.15s var(--ease), background 0.15s ease, box-shadow 0.15s ease;
+}
+.debug-item:hover { background: rgba(255, 255, 255, 0.12); }
+.debug-item.is-focused { box-shadow: 0 0 0 4px #fff; transform: scale(1.02); }
+.debug-ic { flex: none; width: 44px; height: 44px; border-radius: 14px; display: grid; place-items: center; background: rgba(255, 255, 255, 0.1); }
+.debug-ic svg { width: 24px; height: 24px; }
+.debug-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.debug-text b { font-size: 18px; }
+.debug-text span { font-size: 14px; color: rgba(255, 255, 255, 0.65); line-height: 1.35; }

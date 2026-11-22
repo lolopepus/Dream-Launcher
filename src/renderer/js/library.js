@@ -20,10 +20,11 @@
     } else {
       img.remove();
     }
-    const node = el('button', { class: `card ${game.hidden ? 'is-hidden-game' : ''} ${game.installed ? '' : 'not-installed'}`, nav: true, data: { id: game.id }, on: { click: () => onChoose(game) } },
+    // Store badge and favorite star sit on the cover, so they move and scale with it.
+    art.appendChild(el('div', { class: 'card-badges' }, ...DL.badge(game)));
+    if (game.favorite) art.appendChild(el('span', { class: 'card-fav' }, DL.icon('star')));
+    const node = el('button', { class: `card ${game.hidden ? 'is-hidden-game' : ''} ${game.installed ? '' : 'not-installed'}`, nav: true, data: { id: game.id }, attrs: { title: game.name }, on: { click: () => onChoose(game) } },
       art,
-      el('div', { class: 'card-badges' }, ...DL.badge(game)),
-      game.favorite ? el('span', { class: 'card-fav' }, DL.icon('star')) : null,
       el('div', { class: 'card-name', text: game.name }),
       showSize ? el('span', { class: 'card-size', text: DL.fmt.bytes(game.sizeBytes) || '—' }) : null);
     return node;
@@ -177,6 +178,8 @@
     let sheet;
     const update = () => {
       results.textContent = '';
+      // Hidden: "debug" lists screens that normally only appear in certain situations.
+      if (DL.debug && DL.debug.isDebug(input.value)) { DL.debug.render(results, () => sheet.close(true)); return; }
       const list = searchGames(input.value);
       if (!input.value.trim()) results.appendChild(el('div', { class: 'empty-note', text: DL.t('search.hint') }));
       else if (!list.length) results.appendChild(el('div', { class: 'empty-note', text: DL.t('search.none') }));
@@ -190,14 +193,14 @@
         sheet = s;
         input.addEventListener('input', update);
         input.addEventListener('dl-enter', () => {
-          const first = results.querySelector('.card');
+          const first = results.querySelector('.card, .debug-item');
           if (first) first.click();
         });
         const field = el('div', { class: 'text-field search-field', nav: true, on: { click: () => { if (DL.state.inputMode !== 'gamepad') input.focus(); } } }, DL.icon('search', 'field-icon'), input);
         results = el('div', { class: 'card-grid results', attrs: { 'data-scroll': true } });
         const left = el('div', { class: 'search-left' }, field);
         if (pad) {
-          keyboard = DL.ui.osk(input, { onDone: () => { const first = results.querySelector('.card'); if (first) DL.nav.focus(first); } });
+          keyboard = DL.ui.osk(input, { onDone: () => { const first = results.querySelector('.card, .debug-item'); if (first) DL.nav.focus(first); } });
           left.appendChild(keyboard.root);
         }
         body.appendChild(el('div', { class: 'search-layout' }, left, results));

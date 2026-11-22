@@ -90,7 +90,7 @@ test('settings v1 -> v2: date and uninstalled Steam games on, built-in music ren
   const { settings, changed } = migrateSettings(v1);
   assert.equal(changed, true);
   const clean = sanitizeSettings(settings);
-  assert.equal(clean.version, 2);
+  assert.equal(clean.version, 3);
   assert.equal(clean.showDate, true);
   assert.equal(clean.showUninstalledSteam, true);
   assert.equal(clean.music, 'builtin');
@@ -119,7 +119,7 @@ test('store: migrates v1 settings on load and saves them', async () => {
   assert.equal(store.settings.language, 'pl');
   await store.flush();
   const saved = JSON.parse(fs.readFileSync(path.join(dir, 'settings.json'), 'utf8'));
-  assert.equal(saved.version, 2);
+  assert.equal(saved.version, 3);
   assert.equal(saved.showUninstalledSteam, true);
 });
 

@@ -69,7 +69,7 @@
 
     // What works without internet, and what is paused / needs it.
     const works = ['net.worksGames', 'net.worksPlaytime', 'net.worksShots', 'net.worksMusic', 'net.worksArt'];
-    const needs = ['net.needsAch', 'net.needsFriends', 'net.needsArt', 'net.needsOwned', 'net.needsXbox'];
+    const needs = ['net.needsAch', 'net.needsFriends', 'net.needsArt', 'net.needsOwned', 'net.needsXbox', 'net.needsUpdates'];
     const col = (titleKey, keys, icon, cls) => el('div', { class: `net-col ${cls}` },
       el('div', { class: 'net-col-title', text: t(titleKey) }),
       ...keys.map((k) => el('div', { class: 'net-item' }, DL.icon(icon), el('span', { text: t(k) }))));

@@ -207,6 +207,13 @@ test('main process boots and answers IPC + protocol requests', async () => {
   assert.equal(forced.online, false);
   assert.equal(forced.reason, 'forced');
   await call('settings:set', { onlineMode: 'auto' });
+  // Update check: answers, refuses to install without a download.
+  const up = await call('update:status');
+  assert.equal(typeof up.status, 'string');
+  assert.ok(up.current);
+  assert.equal((await call('update:install')).error, 'notReady');
+  const upCheck = await call('update:check');
+  assert.ok(upCheck.error === 'offline' || upCheck.status);
   // Reset one Options tab only.
   await call('settings:set', { musicVolume: 90, reduceMotion: true });
   const afterReset = await call('settings:resetSection', 'sound');
@@ -220,6 +227,12 @@ test('main process boots and answers IPC + protocol requests', async () => {
   assert.deepEqual(await call('game:stopTracking', saved.id), { ok: false });
   assert.equal((await call('shot:showInFolder', 'nope')).error, 'notFound');
   assert.equal((await fake.protocols.dl({ url: 'dl://shot/abcdef' })).status, 404);
+  assert.equal((await fake.protocols.dl({ url: 'dl://shot/abcdef?thumb=1&w=640' })).status, 404);
+  // Clips: unknown clips and paths outside a clip are refused.
+  assert.equal((await call('clip:manifest', 'nope')).error, 'notFound');
+  assert.equal((await call('clip:showInFolder', 'nope')).error, 'notFound');
+  assert.equal((await fake.protocols.dl({ url: 'dl://clip/nope/0/init-stream0.m4s' })).status, 404);
+  assert.equal((await fake.protocols.dl({ url: 'dl://clip/nope/thumb' })).status, 404);
   assert.equal(fake.handlers['profile:pickAvatar'], undefined, 'profile picture handlers removed');
 
   // Remove the manual game again.

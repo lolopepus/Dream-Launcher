@@ -1,4 +1,11 @@
-/* Dream Launcher - animated ribbon waves (inspired by the PlayStation 3 menu background). */
+/*
+ * Dream Launcher - animated ribbon waves (inspired by the PlayStation 3 menu background).
+ *
+ * The waves are drawn on every display refresh while they move. Drawing at an uneven, lower rate
+ * (the old ~30 fps limit) made screens with variable refresh rate (G-Sync / FreeSync) keep changing
+ * their refresh rate, which shows as the whole background flickering on some monitors. Lines are
+ * a little thicker than a hairline and scale with the window, so they don't shimmer while moving.
+ */
 (function () {
   'use strict';
   const DL = (window.DL = window.DL || {});
@@ -11,9 +18,11 @@
   };
   const REVEAL_MS = 1900;
   const BANDS = [
-    { lines: 26, spacing: 6.2, offset: 0, phase: 0, weight: 1 },
-    { lines: 14, spacing: 9, offset: 70, phase: 2.1, weight: 0.55 },
+    { lines: 24, spacing: 6.8, offset: 0, phase: 0, weight: 1 },
+    { lines: 13, spacing: 9.6, offset: 70, phase: 2.1, weight: 0.55 },
   ];
+  const LINE_WIDTH = 1.35; // at 1080p; scales with the window height
+  const ALPHA_FIX = 0.86; // thicker lines, same brightness as before
 
   let canvas = null;
   let g = null;
@@ -30,9 +39,13 @@
   const cur = { ...MODES.intro, r: 185, g: 170, b: 255 };
   let target = { ...MODES.intro, r: 185, g: 170, b: 255 };
 
+  const S = () => DL.state.settings || {};
+  /** Waves move: not with reduced motion or while a game is running. */
+  const moving = () => !S().reduceMotion && !DL.state.gameRunning;
+
   function resize() {
     if (!canvas) return;
-    dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
     w = window.innerWidth;
     h = window.innerHeight;
     canvas.width = Math.max(1, Math.round(w * dpr));
@@ -54,13 +67,13 @@
     grad.addColorStop(0.82, `rgba(${colour},1)`);
     grad.addColorStop(1, `rgba(${colour},0)`);
     g.strokeStyle = grad;
-    g.lineWidth = 1.1;
+    g.lineWidth = Math.max(1, LINE_WIDTH * scale);
     const step = 16;
     for (const band of BANDS) {
       const n = band.lines;
       for (let k = 0; k < n; k++) {
         const edge = Math.sin((Math.PI * k) / (n - 1));
-        g.globalAlpha = cur.alpha * band.weight * (0.12 + 0.88 * edge);
+        g.globalAlpha = cur.alpha * ALPHA_FIX * band.weight * (0.12 + 0.88 * edge);
         g.beginPath();
         for (let x = -step; x <= w + step; x += step) {
           const xs = x / scale;
@@ -103,35 +116,37 @@
 
   function frame(now) {
     raf = 0;
-    const reduce = DL.state.settings && DL.state.settings.reduceMotion;
+    if (!moving()) { settle(); return; }
     // While a menu is open the waves fade to "calm" and then stop, so the blurred
     // background behind the menu does not have to be redrawn every frame.
     if (mode === 'calm' && freezeAt && performance.now() > freezeAt) { draw(); return; }
-    const minDt = mode === 'intro' ? 0 : 30;
-    if (now - lastFrame >= minDt) {
-      const dt = Math.min(0.1, (now - (lastFrame || now)) / 1000);
-      lastFrame = now;
-      const k = Math.min(1, dt * 1.6);
-      for (const key of Object.keys(target)) cur[key] = lerp(cur[key], target[key], k);
-      if (revealStart) {
-        const p = Math.min(1, (now - revealStart) / REVEAL_MS);
-        reveal = 1 - Math.pow(1 - p, 3);
-        if (p >= 1) revealStart = 0;
-      }
-      if (!reduce) t += dt * cur.speed;
-      draw();
+    // One step per display refresh: an even frame rate keeps variable-refresh screens steady.
+    const dt = Math.min(0.1, (now - (lastFrame || now)) / 1000);
+    lastFrame = now;
+    const k = Math.min(1, dt * 1.6);
+    for (const key of Object.keys(target)) cur[key] = lerp(cur[key], target[key], k);
+    if (revealStart) {
+      const p = Math.min(1, (now - revealStart) / REVEAL_MS);
+      reveal = 1 - Math.pow(1 - p, 3);
+      if (p >= 1) revealStart = 0;
     }
-    if (!document.hidden && !reduce) raf = requestAnimationFrame(frame);
+    t += dt * cur.speed;
+    draw();
+    if (!document.hidden) raf = requestAnimationFrame(frame);
+  }
+
+  /** No movement: jump straight to the target look and draw it once. */
+  function settle() {
+    if (raf) { cancelAnimationFrame(raf); raf = 0; }
+    Object.assign(cur, target);
+    reveal = 1;
+    revealStart = 0;
+    draw();
   }
 
   function start() {
     if (!canvas) return;
-    if (DL.state.settings && DL.state.settings.reduceMotion) {
-      // Reduced motion: no animation, jump straight to the target look.
-      Object.assign(cur, target);
-      draw();
-      return;
-    }
+    if (!moving()) { settle(); return; }
     if (!raf) {
       lastFrame = 0;
       raf = requestAnimationFrame(frame);
@@ -164,19 +179,12 @@
     },
     /** Draws the ribbons in from the left (start-up animation). */
     playIntro() {
-      if (DL.state.settings && DL.state.settings.reduceMotion) return;
+      if (!moving()) return;
       reveal = 0;
       revealStart = performance.now();
       start();
     },
-    refresh() {
-      const reduce = DL.state.settings && DL.state.settings.reduceMotion;
-      if (reduce) {
-        Object.assign(cur, target);
-        draw();
-      } else {
-        start();
-      }
-    },
+    /** Call after the settings change or a game starts/ends. */
+    refresh() { start(); },
   };
 })();

@@ -58,6 +58,7 @@
     ['Harbor Lights', 'steam', 0, 0, { status: 'notInstalled' }],
     ['Quiet Orbit', 'epic', 0, 0],
     ['Cinder Road', 'gog', 1500, now - 200 * DAY],
+    ['Tomoyo After ~It\'s a Wonderful Life~ English Edition', 'steam', 300, now - 90 * DAY],
     ['Forza Horizon 5', 'xbox', 1500, now - 50 * DAY, { status: 'notInstalled', known: 'xbox', xboxTitleId: '1551118141', xboxAch: { unlocked: 40, total: 200 } }],
   ];
 
@@ -149,12 +150,18 @@
     services: { steam: { key: true, account: true }, xbox: { key: !window.DL_MOCK_NOXBOX, account: window.DL_MOCK_NOXBOX ? null : { gamertag: 'LoloPlays', gamerscore: 4820 } }, sgdb: { key: false } },
   };
   const isOffline = () => !net.online;
+  // Update check (DL_MOCK_UPDATE: a newer version is waiting on GitHub).
+  let update = window.DL_MOCK_UPDATE
+    ? { status: 'available', current: '2.3.0', latest: { version: '2.4.0', tag: 'v2.4.0', url: 'https://github.com/lolopepus/Dream-Launcher/releases/tag/v2.4.0', asset: { name: 'Dream.Launcher.Setup.2.4.0.exe', size: 124800000, sha256: 'x' } }, checkedAt: now, progress: null, error: null }
+    : { status: 'idle', current: '2.3.0', latest: null, checkedAt: 0, progress: null, error: null };
+  const setUpdate = (patch) => { update = { ...update, ...patch }; emit('update:status', { ...update }); };
   window.dl = {
     init: async () => ({
       settings: { ...settings },
       library: snapshot(),
       profile,
       net: { ...net },
+      update: { ...update },
       presets: [
         { id: 'retroarch', name: 'RetroArch', platform: 'RetroArch', args: '-f -L "cores\\snes9x_libretro.dll" "{rom}"', extensions: ['zip', 'sfc'] },
         { id: 'dolphin', name: 'Dolphin', platform: 'GameCube / Wii', args: '-b -e "{rom}"', extensions: ['iso', 'rvz'] },
@@ -228,12 +235,18 @@
         ] } };
       }
       if (g.source !== 'steam') return { steam: false };
-      const shots = Array.from({ length: i % 3 === 2 ? 0 : 14 }, (_, k) => {
+      const shotCount = i % 3 === 2 ? 0 : (Number(window.DL_MOCK_SHOTS) || 14);
+      const shots = Array.from({ length: shotCount }, (_, k) => {
         const url = art(i * 7 + k + 2, 1920, 1080);
-        return { id: `shot-${i}-${k}`, full: url, thumb: url, time: now - k * 3.7 * 3600e3 };
+        return { id: `shot-${i}-${k}`, kind: 'shot', full: url, thumb: url, time: now - k * 3.7 * 3600e3 };
       });
-      if (isOffline()) return { steam: true, offline: true, screenshots: shots };
-      if (window.DL_MOCK_NOKEY) return { steam: true, needsKey: true, screenshots: shots };
+      // Clips: real Steam-style recordings served by dev/preview.js (DL_PREVIEW_STEAM), if any.
+      let clips = [];
+      if (window.DL_MOCK_CLIPS && i % 3 !== 2) {
+        try { clips = await (await fetch(`/__clips/list?appid=${encodeURIComponent(window.DL_MOCK_CLIPS)}`)).json(); } catch { clips = []; }
+      }
+      if (isOffline()) return { steam: true, offline: true, screenshots: shots, clips };
+      if (window.DL_MOCK_NOKEY) return { steam: true, needsKey: true, screenshots: shots, clips };
       const names = ['First Light', 'Ember Walker', 'Hollow Heart', 'Night Owl', 'Collector', 'Speed Runner', 'No Damage', 'Treasure Hunter', 'Secret Path', 'Master of Embers', 'Explorer', 'Lore Keeper', 'Perfectionist', 'Beast Tamer', 'Old Friend', 'Final Ember'];
       const items = names.map((n, k) => ({
         id: `A${k}`, name: n, desc: k === 12 ? '' : `Complete challenge number ${k + 1} in ${g.name}.`,
@@ -248,9 +261,32 @@
         { id: '76561198000000005', name: 'Noah', avatar: face(5, 'N'), minutes: 30, minutes2w: 0, lastPlayed: now - 120 * DAY, playingNow: false, inGame: false, online: false, state: 0, lastOnline: now - 5 * DAY, achievements: { unlocked: 1, total: 16, firstUnlock: now - 130 * DAY } },
         { id: '76561198000000006', name: 'Ava', avatar: face(6, 'A'), minutes: 12, minutes2w: 0, lastPlayed: 0, playingNow: false, inGame: false, online: false, state: 0, lastOnline: 0, achievements: null },
       ];
-      return { steam: true, achievements: { unlocked: 9, total: items.length, items }, friends: { list: friends }, screenshots: shots };
+      return { steam: true, achievements: { unlocked: 9, total: items.length, items }, friends: { list: friends }, screenshots: shots, clips };
     },
     showScreenshotInFolder: ok,
+    showClipInFolder: ok,
+    clipManifest: async (id) => {
+      try { const r = await fetch(`/__clips/manifest/${encodeURIComponent(id)}`); return r.ok ? r.json() : { error: 'notFound' }; } catch { return { error: 'read' }; }
+    },
+    updateStatus: async () => ({ ...update }),
+    updateCheck: async () => {
+      if (isOffline()) return { ...update, error: 'offline' };
+      setUpdate({ status: 'checking' });
+      await wait(700);
+      setUpdate({ status: update.latest ? 'available' : 'upToDate', checkedAt: Date.now() });
+      return { ...update };
+    },
+    updateDownload: async () => {
+      if (!update.latest) return { error: 'noUpdate' };
+      const total = update.latest.asset.size;
+      for (let p = 0; p <= 10; p++) {
+        setUpdate({ status: 'downloading', progress: { received: Math.round((total * p) / 10), total } });
+        await wait(window.DL_MOCK_DL_MS || 120);
+      }
+      setUpdate({ status: 'ready' });
+      return { ok: true, verified: true };
+    },
+    updateInstall: async () => { window.__installed = true; return { ok: true }; },
     netStatus: async () => ({ ...net }),
     netCheck: async () => { await wait(500); return { ...net }; },
     testXbox: async () => (isOffline() ? { error: 'offline' } : { ok: true, name: 'LoloPlays', gamerscore: 4820 }),
@@ -291,4 +327,5 @@
     minimize: ok, toggleFullscreen: async () => ({ fullscreen: true }),
     on: (ev, fn) => { (listeners[ev] = listeners[ev] || []).push(fn); return () => {}; },
   };
+  if (window.DL_MOCK_UPDATE) setTimeout(() => emit('update:announce', { ...update }), window.DL_MOCK_ANNOUNCE_MS || 6000);
 })();

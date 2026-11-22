@@ -4,7 +4,7 @@ const LANGUAGES = ['auto', 'en', 'de', 'pl'];
 const SOURCES = ['steam', 'epic', 'gog', 'ubisoft', 'xbox', 'emulators', 'manual'];
 const SUBSCRIPTIONS = ['gamepass', 'eaplay', 'ubisoftplus'];
 
-const SETTINGS_VERSION = 2;
+const SETTINGS_VERSION = 3;
 
 const DEFAULT_SETTINGS = Object.freeze({
   version: SETTINGS_VERSION,
@@ -18,6 +18,8 @@ const DEFAULT_SETTINGS = Object.freeze({
   confirmExit: true,
   // Online features: 'auto' = online when there is internet, 'offline' = never go online.
   onlineMode: 'auto',
+  // Look for a newer version on GitHub (at most every 6 hours, only while online).
+  checkForUpdates: true,
   // Home & display
   uiSize: 'auto',
   showClock: true,
@@ -52,7 +54,8 @@ const DEFAULT_SETTINGS = Object.freeze({
   sources: Object.freeze({ steam: true, epic: true, gog: true, ubisoft: true, xbox: true, emulators: true, manual: true }),
   showUninstalledSteam: true,
   // Xbox PC games from your Xbox history that are not installed (needs the OpenXBL key).
-  showUninstalledXbox: true,
+  // Off by default: that history comes from an outside service and is less reliable than Steam's list.
+  showUninstalledXbox: false,
   showHiddenGames: false,
   launchGogViaGalaxy: false,
   // Accounts & artwork
@@ -79,7 +82,7 @@ const ENUMS = {
 
 /** Settings shown on each Options tab (for "Reset this tab"). The chosen music file is kept. */
 const SECTION_KEYS = Object.freeze({
-  general: ['language', 'startWithWindows', 'startFullscreen', 'playIntro', 'minimizeOnLaunch', 'restoreAfterPlaying', 'confirmExit', 'onlineMode'],
+  general: ['language', 'startWithWindows', 'startFullscreen', 'playIntro', 'minimizeOnLaunch', 'restoreAfterPlaying', 'confirmExit', 'onlineMode', 'checkForUpdates'],
   display: ['uiSize', 'showClock', 'clockFormat', 'showDate', 'showBattery', 'showGameInfo', 'onlyKnownPlaytime', 'showLogos', 'showHeroArt', 'showStoreBadges', 'showSubscriptionBadges', 'homeOrder', 'reduceMotion'],
   sound: ['uiSounds', 'soundVolume', 'music', 'musicSpeed', 'musicVolume', 'pauseMusicWhilePlaying'],
   controllers: ['buttonGlyphs', 'confirmButton', 'vibration', 'showControllerToast'],
@@ -207,6 +210,7 @@ function sanitizeSettings(input, base = DEFAULT_SETTINGS) {
  * Returns { settings, changed }.
  *  v1 -> v2: the date is shown by default, and uninstalled Steam games are listed by default
  *            (they now appear only in the library, no longer on the home screen).
+ *  v2 -> v3: uninstalled Xbox games are off by default (Xbox history is less reliable).
  */
 function migrateSettings(raw) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { settings: raw, changed: false };
@@ -221,6 +225,7 @@ function migrateSettings(raw) {
     delete next.profileName;
     delete next.profileAvatar;
   }
+  if (from < 3) next.showUninstalledXbox = false;
   next.version = SETTINGS_VERSION;
   return { settings: next, changed: true };
 }

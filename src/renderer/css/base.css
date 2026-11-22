@@ -259,4 +259,4 @@ body.has-overlay #toast-host { top: 10px; }
   animation-iteration-count: 1 !important;
 }
 .reduce-motion .launch-spinner { animation: none; }
-.reduce-motion .hero-layer.on { animation: none; transform: none; }
+.reduce-motion .hero-layer.on:not(.blur) { animation: none; transform: none; }

@@ -246,13 +246,16 @@ test('xbox: played-but-not-installed PC games appear in the library (Steam-style
     { titleId: '3', name: 'Halo 5', type: 'Game', devices: ['XboxOne'], titleHistory: { lastTimePlayed: '2025-01-01T10:00:00Z' } },
     { titleId: '4', name: 'Netflix', type: 'App', devices: ['PC'] },
     { titleId: '5', name: 'Hollow Knight', type: 'Game', devices: ['PC'] },
+    // Listed by Xbox but never really played: no start date, or no playtime.
+    { titleId: '6', name: 'Kingdom Hearts IV', type: 'Game', devices: ['PC', 'XboxSeries'] },
+    { titleId: '7', name: 'Gears of War: E-Day', type: 'Game', devices: ['PC', 'XboxSeries'], titleHistory: { lastTimePlayed: '2026-11-01T10:00:00Z' } },
   ];
   const fetch = async (url, opts) => {
     if (url.endsWith('/account')) return res(200, { profileUsers: [{ id: '2533274800000000', settings: [{ id: 'Gamertag', value: 'Lolo' }] }] });
     if (url.endsWith('/player/titleHistory')) return res(200, { titles });
     if (url.endsWith('/player/stats')) {
       const body = JSON.parse(opts.body);
-      return res(200, { statlistscollection: [{ arrangebyfield: 'xuid', arrangebyfieldid: '2533274800000000', stats: body.stats.map((x) => ({ name: 'MinutesPlayed', titleid: x.titleId, value: x.titleId === '2' ? '1500' : '60' })) }] });
+      return res(200, { statlistscollection: [{ arrangebyfield: 'xuid', arrangebyfieldid: '2533274800000000', stats: body.stats.map((x) => ({ name: 'MinutesPlayed', titleid: x.titleId, value: x.titleId === '2' ? '1500' : x.titleId === '7' ? '0' : '60' })) }] });
     }
     return res(404, {});
   };
@@ -270,6 +273,8 @@ test('xbox: played-but-not-installed PC games appear in the library (Steam-style
   assert.ok(!ids.includes('xbox:title:3'), 'console-only game is skipped');
   assert.ok(!ids.includes('xbox:title:4'), 'apps are skipped');
   assert.ok(!ids.includes('xbox:title:5'), 'already in the library from Steam');
+  assert.ok(!ids.includes('xbox:title:6'), 'never started: skipped');
+  assert.ok(!ids.includes('xbox:title:7'), 'no playtime: skipped');
   const fh5 = all.find((g) => g.id === 'xbox:title:2');
   assert.equal(fh5.status, 'notInstalled');
   assert.equal(fh5.playtimeMinutes, 1500);
@@ -283,4 +288,16 @@ test('xbox: played-but-not-installed PC games appear in the library (Steam-style
   const again = [all[0]];
   await lib._mergeXbox(again, { xbox: {} });
   assert.equal(again.length, 1);
+});
+
+test('settings: uninstalled Xbox games are off by default and turned off once for older settings', () => {
+  const { DEFAULT_SETTINGS, migrateSettings } = require('../src/main/defaults');
+  assert.equal(DEFAULT_SETTINGS.showUninstalledXbox, false);
+  assert.equal(DEFAULT_SETTINGS.showUninstalledSteam, true);
+  const { settings, changed } = migrateSettings({ version: 2, showUninstalledXbox: true, showUninstalledSteam: true });
+  assert.equal(changed, true);
+  assert.equal(settings.showUninstalledXbox, false);
+  assert.equal(settings.showUninstalledSteam, true);
+  // Turned on again afterwards: stays on.
+  assert.equal(migrateSettings({ ...settings, showUninstalledXbox: true }).settings.showUninstalledXbox, true);
 });

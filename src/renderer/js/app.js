@@ -43,6 +43,7 @@
       const center = intro.querySelector('.intro-center');
       if (center) center.appendChild(DL.el('p', { class: 'intro-error', text: message }));
       intro.classList.add('play', 'failed');
+      DL.state.inputBlockedUntil = 0;
     }
   }
 
@@ -58,9 +59,11 @@
     DL.api.on('game:started', () => {
       DL.state.gameRunning = true;
       if (DL.state.settings.pauseMusicWhilePlaying) DL.music.pause('game');
+      DL.waves.refresh(); // the waves rest while a game runs
     });
     DL.api.on('game:ended', () => {
       DL.state.gameRunning = false;
+      DL.waves.refresh();
       DL.music.resume('game');
       DL.actions.hideLaunching();
     });
@@ -82,6 +85,12 @@
     loadFriends();
     DL.app = { ...(DL.app || {}), loadFriends };
     DL.api.on('net:status', (net) => DL.net.apply(net));
+    DL.api.on('update:status', (u) => { DL.state.update = u; DL.bus.emit('update', u); });
+    DL.api.on('update:announce', (u) => {
+      DL.state.update = u;
+      DL.bus.emit('update', u);
+      if (u && u.latest) DL.toast({ title: DL.t('update.toastTitle', { v: u.latest.version }), sub: DL.t('update.toastText'), icon: 'download', duration: 7000 });
+    });
     DL.api.on('steam:friends', () => { DL.state.details.clear(); loadFriends(); if (DL.hub) { DL.hub.invalidate(); DL.hub.reload(); } });
     DL.api.on('app:focus', (focused) => { if (focused) DL.input.startPolling(); });
   }
@@ -100,13 +109,17 @@
       if ('pauseMusicWhilePlaying' in patch && !s.pauseMusicWhilePlaying) DL.music.resume('game');
       if (patch.all || 'uiSize' in patch) scaleStage();
       if (patch.all || 'reduceMotion' in patch) {
-        document.body.classList.toggle('reduce-motion', !!s.reduceMotion);
+        applyMotionClasses();
         DL.waves.refresh();
       }
     });
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) DL.music.pause('hidden'); else DL.music.resume('hidden');
     });
+  }
+
+  function applyMotionClasses() {
+    document.body.classList.toggle('reduce-motion', !!(DL.state.settings || {}).reduceMotion);
   }
 
   function globalAction(action) {
@@ -142,6 +155,7 @@
     if (!s.playIntro) {
       reveal(true);
       intro.remove();
+      DL.state.inputBlockedUntil = Date.now() + 350;
       return;
     }
     buildWordmark(intro);
@@ -172,6 +186,9 @@
     reveal(!!s.reduceMotion);
     await DL.sleep(s.reduceMotion ? 150 : 1100);
     intro.remove();
+    // A short pause after the dashboard is in place, so a held or repeated button press from
+    // skipping the intro doesn't start a game.
+    DL.state.inputBlockedUntil = Date.now() + 300;
   }
 
   async function boot() {
@@ -191,10 +208,12 @@
     DL.state.system = init.system || {};
     DL.state.profile = init.profile || {};
     if (init.net && typeof init.net === 'object') DL.state.net = init.net;
+    DL.state.update = init.update || null;
     DL.state.presets = init.presets || [];
     DL.i18n.set(DL.state.settings.language);
     DL.i18n.apply(document);
-    document.body.classList.toggle('reduce-motion', !!DL.state.settings.reduceMotion);
+    applyMotionClasses();
+    DL.waves.refresh();
     DL.sound.applySettings();
     scaleStage();
 
@@ -207,6 +226,8 @@
     DL.state.ready = true;
     await playIntro(init.library && init.library.games && init.library.games.length > 0);
     DL.music.apply();
+    // Explains the free API keys (Steam, SteamGridDB, Xbox) if a useful one is missing.
+    if (DL.keysTip) DL.keysTip.maybeShow();
   }
 
   DL.app = { uiSizeKey, scaleStage };

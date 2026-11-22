@@ -26,6 +26,13 @@
     if (changed) DL.bus.emit('inputmode');
   }
 
+  // Until the dashboard is fully on screen, buttons only skip the intro: they must not start a
+  // game nobody can see yet. app.js opens the gate when the intro has finished.
+  if (DL.state.inputBlockedUntil === undefined) DL.state.inputBlockedUntil = Infinity;
+  const inputBlocked = () => Date.now() < DL.state.inputBlockedUntil;
+  // Safety net: if start-up ever stops before the intro ends, buttons must not stay dead.
+  setTimeout(() => { if (DL.state.inputBlockedUntil === Infinity) DL.state.inputBlockedUntil = 0; }, 30000);
+
   function dispatch(action, source) {
     DL.sound.unlock();
     if (!DL.state.musicUnlocked) {
@@ -33,7 +40,15 @@
       DL.music.apply();
     }
     DL.bus.emit('input', action, source);
+    if (inputBlocked()) return;
     if (DL.nav) DL.nav.handle(action, source);
+  }
+
+  // Same for mouse and touch: clicks during the intro reach nothing.
+  for (const type of ['click', 'dblclick', 'contextmenu']) {
+    window.addEventListener(type, (e) => {
+      if (inputBlocked()) { e.preventDefault(); e.stopPropagation(); }
+    }, true);
   }
 
   // ---------------------------------------------------------------- keyboard
@@ -65,6 +80,9 @@
     const action = KEYMAP[e.key];
     if (!action) return;
     e.preventDefault();
+    // A held key repeats: only arrow keys may do that. A held Enter (e.g. from skipping the
+    // intro) must not start a game the moment the dashboard appears, or start it twice.
+    if (e.repeat && !['up', 'down', 'left', 'right'].includes(action)) return;
     // Steam Input's desktop layout turns controller presses into arrow keys/Enter/Escape.
     // Ignore those while a controller is in use, so nothing happens twice.
     if (performance.now() - lastPadActivity < STEAM_INPUT_GUARD_MS && ['up', 'down', 'left', 'right', 'confirm', 'back'].includes(action)) return;

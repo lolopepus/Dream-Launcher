@@ -8,7 +8,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 const invoke = (channel, ...args) => ipcRenderer.invoke(channel, ...args);
 
 const EVENTS = new Set([
-  'library:updated', 'game:started', 'game:ended', 'profile:updated', 'app:focus', 'app:fullscreen', 'app:device', 'steam:friends', 'net:status',
+  'library:updated', 'game:started', 'game:ended', 'profile:updated', 'app:focus', 'app:fullscreen', 'app:device', 'steam:friends', 'net:status', 'update:status', 'update:announce',
 ]);
 
 contextBridge.exposeInMainWorld('dl', {
@@ -33,10 +33,16 @@ contextBridge.exposeInMainWorld('dl', {
   gameHub: (id, lang) => invoke('game:hub', id, lang),
   stopTracking: (id) => invoke('game:stopTracking', id),
   showScreenshotInFolder: (token) => invoke('shot:showInFolder', token),
+  clipManifest: (token) => invoke('clip:manifest', token),
+  showClipInFolder: (token) => invoke('clip:showInFolder', token),
   friendsSummary: () => invoke('steam:friendsSummary'),
   netStatus: () => invoke('net:status'),
   netCheck: () => invoke('net:check'),
   testXbox: () => invoke('xbox:test'),
+  updateStatus: () => invoke('update:status'),
+  updateCheck: () => invoke('update:check'),
+  updateDownload: () => invoke('update:download'),
+  updateInstall: () => invoke('update:install'),
 
   pickManualGame: () => invoke('manual:pick'),
   saveManualGame: (entry) => invoke('manual:save', entry),

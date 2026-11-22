@@ -1,7 +1,7 @@
 /*
  * Dream Launcher - the slide-down hub under the tile row ("press down on a game").
- * Steam games: achievements, friends who play it and Steam screenshots. Other games: game info.
- * Each card opens a full view: achievement list, friends list, screenshot gallery and viewer.
+ * Steam games: achievements, friends who play it and Steam screenshots & clips. Other games: game info.
+ * Each card opens a full view: achievement list, friends list, gallery and viewer (clips play here).
  */
 (function () {
   'use strict';
@@ -11,6 +11,7 @@
   DL.icons.users = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 19.5c1-3.3 3.5-5 6.5-5s5.5 1.7 6.5 5"/><circle cx="17" cy="9" r="2.8"/><path d="M16.5 14.6c2.6.2 4.3 1.7 5 4.4"/></svg>';
   DL.icons.camera = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 8.5A2.5 2.5 0 0 1 5.5 6h2l1.5-2h6l1.5 2h2A2.5 2.5 0 0 1 21 8.5v9a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5z"/><circle cx="12" cy="12.5" r="3.6"/></svg>';
   DL.icons.calendar = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>';
+  DL.icons.pauseFill = '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4.5" width="4.2" height="15" rx="1.2"/><rect x="13.8" y="4.5" width="4.2" height="15" rx="1.2"/></svg>';
   DL.icons.lock = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="5" y="10.5" width="14" height="10" rx="2.5"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/></svg>';
 
   const TTL = 90 * 1000;
@@ -58,6 +59,37 @@
     const img = el('img', { class: cls, attrs: { alt, src, loading: 'lazy', decoding: 'async', draggable: 'false', referrerpolicy: 'no-referrer' } });
     img.onerror = () => { img.style.visibility = 'hidden'; };
     return img;
+  }
+
+  const THUMB_SIZES = [480, 640, 960, 1280, 1600];
+  /**
+   * Screenshot previews are made by the app at the size they are shown (interface scale × pixel
+   * density), so they are sharp on any screen without loading full pictures.
+   */
+  function sizedThumb(url, cssWidth) {
+    if (!url || !/^dl:\/\/shot\//.test(url)) return url;
+    const px = cssWidth * ((DL.stage && DL.stage.s) || 1) * (window.devicePixelRatio || 1);
+    const w = THUMB_SIZES.find((x) => x >= px) || THUMB_SIZES[THUMB_SIZES.length - 1];
+    return `${url}${url.includes('?') ? '&' : '?'}w=${w}`;
+  }
+
+  /** Screenshots and clips of a game, newest first. */
+  function mediaOf(data) {
+    const shots = data && Array.isArray(data.screenshots) ? data.screenshots.map((x) => ({ kind: 'shot', ...x })) : [];
+    const clips = data && Array.isArray(data.clips) ? data.clips.map((x) => ({ ...x, kind: 'clip' })) : [];
+    return { shots, clips, all: shots.concat(clips).sort((a, b) => (b.time || 0) - (a.time || 0)) };
+  }
+
+  /** Picture of a screenshot or clip, with a play mark and length for clips. */
+  function mediaThumb(item, cssWidth, cls) {
+    const node = el('div', { class: `${cls} ${item.kind === 'clip' ? 'is-clip' : ''}` });
+    if (item.thumb) node.appendChild(safeImg(sizedThumb(item.thumb, cssWidth), ''));
+    else node.appendChild(el('span', { class: 'media-noimg' }, item.kind === 'clip' ? null : DL.icon('image')));
+    if (item.kind === 'clip') {
+      node.appendChild(el('span', { class: 'media-play' }, DL.icon('play')));
+      if (item.duration > 0) node.appendChild(el('span', { class: 'media-len', text: DL.clips.clock(item.duration) }));
+    }
+    return node;
   }
 
   function avatar(p, cls = 'friend-av') {
@@ -238,20 +270,22 @@
   }
 
   function screenshotsCard(game, data) {
-    const shots = data && Array.isArray(data.screenshots) ? data.screenshots : null;
-    const node = card('screenshots', () => { if (shots && shots.length) openGallery(game, shots); });
-    node.appendChild(head('image', t('hub.screenshots'), shots && shots.length ? DL.fmt.number(shots.length) : null));
+    const media = data ? mediaOf(data) : null;
+    const items = media ? media.all : null;
+    const node = card('screenshots', () => { if (items && items.length) openGallery(game, media); });
+    const title = media && media.clips.length ? t('hub.media') : t('hub.screenshots');
+    node.appendChild(head('image', title, items && items.length ? DL.fmt.number(items.length) : null));
     const body = el('div', { class: 'hub-body' });
     node.appendChild(body);
     if (!data) { body.appendChild(el('div', { class: 'hub-skel', style: { flex: '1' } })); return node; }
-    if (!shots || !shots.length) {
+    if (!items.length) {
       body.appendChild(el('div', { class: 'shots-empty' },
         el('div', {}, DL.icon('camera'), el('p', { class: 'hub-note', text: t('hub.noShotsSteam') }))));
       return node;
     }
-    const n = Math.min(3, shots.length);
+    const n = Math.min(3, items.length);
     const mosaic = el('div', { class: `shots-mosaic ${n === 1 ? 'one' : n === 2 ? 'two' : ''}` });
-    for (const s of shots.slice(0, n)) mosaic.appendChild(el('div', { class: 'shot' }, safeImg(s.thumb, '')));
+    items.slice(0, n).forEach((m, i) => mosaic.appendChild(mediaThumb(m, i === 0 ? 420 : 220, 'shot')));
     body.appendChild(mosaic);
     node.appendChild(more(t('hub.showAll')));
     return node;
@@ -430,24 +464,51 @@
     return sheet;
   }
 
-  function openGallery(game, shots) {
+  function openGallery(game, media) {
+    const filters = media.clips.length && media.shots.length ? ['all', 'shots', 'clips'] : ['all'];
+    let filter = 'all';
     let sheet;
+    const listFor = (f) => (f === 'shots' ? media.shots : f === 'clips' ? media.clips : media.all);
+    const countText = () => {
+      const parts = [];
+      if (media.shots.length) parts.push(t('hub.shotCount', { n: DL.fmt.number(media.shots.length), count: media.shots.length }));
+      if (media.clips.length) parts.push(t('hub.clipCount', { n: DL.fmt.number(media.clips.length), count: media.clips.length }));
+      return parts.join(' · ');
+    };
+    const renderGrid = (body) => {
+      body.textContent = '';
+      if (filters.length > 1) {
+        body.appendChild(el('div', { class: 'chips gallery-chips' }, ...filters.map((f) => el('button', {
+          class: `chip ${f === filter ? 'active' : ''}`, nav: true, text: t(`hub.mediaFilter.${f}`),
+          on: { click: () => { if (filter !== f) { filter = f; renderGrid(body); DL.nav.refresh(); } } },
+        }))));
+      }
+      const list = listFor(filter);
+      const grid = el('div', { class: 'gallery-grid', attrs: { 'data-scroll': true } });
+      list.forEach((m, i) => {
+        grid.appendChild(el('button', { class: 'gallery-item', nav: true, data: { i: String(i) }, on: { click: () => openViewer(game, list, i) } },
+          mediaThumb(m, 480, 'gallery-frame')));
+      });
+      body.appendChild(grid);
+    };
     sheet = DL.ui.openSheet({
       id: 'gallery',
       cls: 'full',
-      title: t('hub.screenshots'),
+      title: media.clips.length ? t('hub.media') : t('hub.screenshots'),
       subtitle: game.name,
-      build(body) {
-        sheet = sheet || null;
-        const grid = el('div', { class: 'gallery-grid', attrs: { 'data-scroll': true } });
-        shots.forEach((s, i) => {
-          grid.appendChild(el('button', { class: 'gallery-item', nav: true, data: { i: String(i) }, on: { click: () => openViewer(game, shots, i) } }, safeImg(s.thumb, '')));
-        });
-        body.appendChild(grid);
-      },
+      build(body) { renderGrid(body); },
       initial: (panel) => panel.querySelector('.gallery-item'),
-      hints: [['confirm', t('hub.view')], ['back', t('hints.back')]],
+      hints: filters.length > 1
+        ? [['confirm', t('hub.view')], ['lbrb', t('hints.filter')], ['back', t('hints.back')]]
+        : [['confirm', t('hub.view')], ['back', t('hints.back')]],
       onAction(action) {
+        if ((action === 'lb' || action === 'rb') && filters.length > 1) {
+          filter = filters[(filters.indexOf(filter) + (action === 'rb' ? 1 : -1) + filters.length) % filters.length];
+          DL.sound.play('toggle');
+          renderGrid(sheet.body);
+          DL.nav.focus(sheet.body.querySelector('.gallery-item') || sheet.body.querySelector('.chip.active'), { sound: false, force: true });
+          return true;
+        }
         if (action === 'lt' || action === 'rt') {
           const grid = sheet.body.querySelector('.gallery-grid');
           if (grid) grid.scrollBy({ top: (action === 'rt' ? 1 : -1) * grid.clientHeight * 0.8 });
@@ -456,26 +517,136 @@
         return false;
       },
     });
-    sheet.headExtra.textContent = t('hub.shotCount', { n: DL.fmt.number(shots.length), count: shots.length });
+    sheet.headExtra.textContent = countText();
   }
 
-  function openViewer(game, shots, start) {
+  /** Full-screen view of screenshots and clips; clips play right here. */
+  function openViewer(game, items, start) {
     let i = start;
     let sheet;
+    let player = null;
+    let token = 0; // ignores a clip that finishes loading after moving on
+    let musicPaused = false;
     const img = el('img', { class: 'viewer-img', attrs: { alt: '', draggable: 'false' } });
+    const video = el('video', { class: 'viewer-video', attrs: { playsinline: '', preload: 'auto', disablepictureinpicture: '' } });
+    const bigPlay = el('div', { class: 'clip-bigplay' }, DL.icon('play'));
+    const msg = el('div', { class: 'clip-msg' });
+    const spinner = el('div', { class: 'clip-spinner' });
+    const playBtn = el('button', { class: 'clip-btn', attrs: { 'aria-label': t('hub.playPause') }, on: { click: (e) => { e.stopPropagation(); if (player) player.toggle(); } } }, DL.icon('play'));
+    const posText = el('span', { class: 'clip-time', text: '0:00' });
+    const lenText = el('span', { class: 'clip-time', text: '0:00' });
+    const bufBar = el('i', { class: 'clip-buf' });
+    const posBar = el('i', { class: 'clip-pos' });
+    const track = el('div', { class: 'clip-track' }, bufBar, posBar);
+    const bar = el('div', { class: 'clip-bar' }, playBtn, posText, track, lenText);
     const info = el('div', { class: 'viewer-info' });
+    let stage;
+
+    track.addEventListener('pointerdown', (e) => {
+      if (!player || player.info.error) return;
+      const r = track.getBoundingClientRect();
+      const f = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+      player.seek(f * (player.info.duration || 0));
+    });
+    video.addEventListener('click', () => { if (player) player.toggle(); });
+    bigPlay.addEventListener('click', () => { if (player) player.toggle(); });
+
+    const errorText = (code) => {
+      if (code === 'codec') {
+        const c = player && player.info.codec;
+        const name = c === 'hevc' ? 'HEVC (H.265)' : c === 'av1' ? 'AV1' : c === 'h264' ? 'H.264' : '';
+        return name ? t('hub.clipCodec', { codec: name }) : t('hub.clipCodecUnknown');
+      }
+      if (code === 'notFound' || code === 'empty') return t('hub.clipMissing');
+      if (code === 'memory') return t('hub.clipTooBig');
+      return t('hub.clipFailed');
+    };
+
+    const paint = (st) => {
+      if (!player) return;
+      if (st.error) {
+        stage.classList.add('clip-error');
+        stage.classList.remove('clip-paused', 'clip-waiting');
+        msg.textContent = errorText(st.error);
+        return;
+      }
+      const d = st.duration || 0;
+      const cur = player.currentTime || 0;
+      posText.textContent = DL.clips.clock(cur);
+      lenText.textContent = DL.clips.clock(d);
+      posBar.style.width = `${d ? Math.min(100, (cur / d) * 100) : 0}%`;
+      bufBar.style.width = `${d ? Math.min(100, (player.buffered() / d) * 100) : 0}%`;
+      const paused = player.paused || player.ended;
+      stage.classList.toggle('clip-paused', paused && !st.error);
+      stage.classList.toggle('clip-waiting', !paused && video.readyState < 3 && !st.error);
+      if (playBtn.dataset.state !== String(paused)) {
+        playBtn.dataset.state = String(paused);
+        playBtn.textContent = '';
+        playBtn.appendChild(DL.icon(paused ? 'play' : 'pauseFill'));
+      }
+      stage.classList.toggle('clip-muted', !!st.muted);
+    };
+
+    const stopClip = () => {
+      token++;
+      if (player) { player.destroy(); player = null; }
+      stage.classList.remove('is-clip', 'clip-error', 'clip-paused', 'clip-waiting', 'clip-muted', 'clip-loading');
+      msg.textContent = '';
+      if (musicPaused) { DL.music.resume('clip'); musicPaused = false; }
+    };
+
+    const hintsFor = (item) => (item.kind === 'clip'
+      ? [['confirm', t('hub.playPause'), () => player && player.toggle()], ['ltrt', t('hub.seek10')], ['leftright', t('hub.prevNext')], ['x', t('hub.showInFolder'), () => showInFolder()], ['back', t('hints.close'), () => sheet.close()]]
+      : [['leftright', t('hub.prevNext')], ['x', t('hub.showInFolder'), () => showInFolder()], ['back', t('hints.close'), () => sheet.close()]]);
+
+    const showInFolder = () => {
+      const item = items[i];
+      if (item.kind === 'clip') DL.api.showClipInFolder(item.id);
+      else DL.api.showScreenshotInFolder(item.id);
+    };
+
+    const startClip = async (item) => {
+      const my = ++token;
+      stage.classList.add('is-clip', 'clip-loading');
+      lenText.textContent = DL.clips.clock(item.duration || 0);
+      posText.textContent = '0:00';
+      posBar.style.width = '0%';
+      bufBar.style.width = '0%';
+      if (!musicPaused) { DL.music.pause('clip'); musicPaused = true; }
+      let manifest;
+      try { manifest = await DL.api.clipManifest(item.id); } catch { manifest = { error: 'read' }; }
+      if (my !== token || (sheet && sheet.closed)) return;
+      stage.classList.remove('clip-loading');
+      if (!manifest || manifest.error) {
+        stage.classList.add('clip-error');
+        msg.textContent = errorText(manifest ? manifest.error : 'read');
+        return;
+      }
+      player = DL.clips.play(video, manifest, { onState: paint });
+      if (!player.info.error) player.play();
+      paint(player.info);
+    };
+
     const show = () => {
-      const s = shots[i];
+      const item = items[i];
+      stopClip();
+      info.textContent = `${i + 1} / ${items.length}  ·  ${DL.fmt.dateTime(item.time)}`;
+      if (sheet) sheet.setHints(hintsFor(item));
+      if (item.kind === 'clip') {
+        img.classList.remove('loaded');
+        img.removeAttribute('src');
+        startClip(item);
+        return;
+      }
       img.classList.remove('loaded');
       img.onload = () => img.classList.add('loaded');
-      img.src = s.full;
-      info.textContent = `${i + 1} / ${shots.length}  ·  ${DL.fmt.dateTime(s.time)}`;
-      // Preload the neighbours.
-      for (const j of [i + 1, i - 1]) if (shots[j]) { const p = new Image(); p.src = shots[j].full; }
+      img.src = item.full;
+      // Preload the neighbours (screenshots only).
+      for (const j of [i + 1, i - 1]) if (items[j] && items[j].kind !== 'clip') { const p = new Image(); p.src = items[j].full; }
     };
     const step = (dir) => {
       const n = i + dir;
-      if (n < 0 || n >= shots.length) { DL.sound.play('error'); return; }
+      if (n < 0 || n >= items.length) { DL.sound.play('error'); return; }
       i = n;
       DL.sound.play('move');
       show();
@@ -487,23 +658,31 @@
       build(body) {
         const prev = el('button', { class: 'viewer-nav prev', nav: true, attrs: { 'data-silent': true }, on: { click: () => step(-1) } }, DL.icon('chevronLeft'));
         const next = el('button', { class: 'viewer-nav next', nav: true, attrs: { 'data-silent': true }, on: { click: () => step(1) } }, DL.icon('chevron'));
-        body.appendChild(el('div', { class: 'viewer-stage' }, img, prev, next));
+        stage = el('div', { class: 'viewer-stage' }, img, video, bigPlay, spinner, msg, prev, next);
+        body.appendChild(stage);
+        body.appendChild(bar);
         body.appendChild(info);
-        show();
       },
       initial: (panel) => panel.querySelector('.viewer-nav.next'),
-      hints: [['leftright', t('hub.prevNext')], ['x', t('hub.showInFolder'), () => DL.api.showScreenshotInFolder(shots[i].id)], ['back', t('hints.close')]],
+      hints: hintsFor(items[i]),
+      onClose: () => stopClip(),
       onMove(dir) {
         if (dir === 'left' || dir === 'right') { step(dir === 'right' ? 1 : -1); return true; }
         return true;
       },
       onAction(action) {
-        if (action === 'x') { DL.api.showScreenshotInFolder(shots[i].id); return true; }
-        if (action === 'confirm') return true;
+        const clip = items[i].kind === 'clip';
+        if (action === 'x') { showInFolder(); return true; }
+        if (action === 'confirm') { if (clip && player) { player.toggle(); DL.sound.play('toggle'); } return true; }
         if (action === 'lb' || action === 'rb') { step(action === 'rb' ? 1 : -1); return true; }
+        if (action === 'lt' || action === 'rt') {
+          if (clip && player && !player.info.error) { player.seekBy(action === 'rt' ? 10 : -10); DL.sound.play('move'); }
+          return true;
+        }
         return false;
       },
     });
+    show();
   }
 
   // ---------------------------------------------------------------- public

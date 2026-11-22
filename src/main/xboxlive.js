@@ -425,7 +425,13 @@ class XboxLive {
     let minutes = {};
     if (ids.length && refresh) minutes = await this.minutes(key, account.xuid, ids).catch((err) => { if (err.auth) throw err; return {}; });
     else for (const id of ids) { const e = this.data.minutes[id]; if (e && Number.isFinite(e.minutes)) minutes[id] = e.minutes; }
-    return list.map((t) => ({ ...t, minutes: Object.prototype.hasOwnProperty.call(minutes, t.titleId) ? minutes[t.titleId] : null }));
+    // Xbox's title history also lists games you only looked at, wishlisted or that came with a
+    // subscription, and "devices" says where a game *can* run, not where you played it. So only
+    // games you really played are kept: a start date plus playtime (or, if Xbox didn't send the
+    // playtime, at least one achievement).
+    return list
+      .map((t) => ({ ...t, minutes: Object.prototype.hasOwnProperty.call(minutes, t.titleId) ? minutes[t.titleId] : null }))
+      .filter((t) => t.lastPlayed > 0 && (t.minutes > 0 || (t.minutes === null && t.ach && t.ach.unlocked > 0)));
   }
 
   async achievements(key, titleId, lang) {

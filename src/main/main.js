@@ -14,10 +14,23 @@ const { Artwork } = require('./artwork');
 const { SteamWeb } = require('./steamweb');
 const { XboxLive } = require('./xboxlive');
 const { Connectivity } = require('./connectivity');
+const { Updater } = require('./updater');
+const { spawn } = require('child_process');
+// GitHub repository whose releases are checked for updates. package.json can override it; the
+// fallback matters because packaging may not keep custom package.json fields.
+const DEFAULT_UPDATE_REPO = 'lolopepus/Dream-Launcher';
+const UPDATE_REPO = (() => {
+  try {
+    const r = require('../../package.json').updateRepo;
+    return typeof r === 'string' && /^[\w.-]+\/[\w.-]+$/.test(r) ? r : DEFAULT_UPDATE_REPO;
+  } catch { return DEFAULT_UPDATE_REPO; }
+})();
 const { Sessions } = require('./sessions');
 const { runProbe, listProcesses, listProcessNames, detectDevice } = require('./util/powershell');
 const { classifyDevice } = require('./device');
 const { steamScreenshots } = require('./screenshots');
+const { listClips, clipManifest } = require('./clips');
+const { Thumbs } = require('./thumbs');
 const { PRESETS } = require('./emulator-presets');
 const { sanitizeSettings, sanitizeOverrides, SECRET_KEYS, sectionDefaults } = require('./defaults');
 const { readJson, writeJsonAtomic } = require('./util/fsx');
@@ -66,6 +79,7 @@ let artwork;
 let steamWeb;
 let xbox;
 let connectivity;
+let updater;
 let sessions;
 let quitting = false;
 
@@ -181,38 +195,18 @@ async function refreshDevice() {
 
 // ---------------------------------------------------------------- Steam screenshots
 
-const shotTokens = new Map(); // token -> { path, thumbPath }
-const thumbCache = new Map(); // token -> Buffer (JPEG)
+const shotTokens = new Map(); // token -> { path, thumbPath, mtime }
+let thumbs = null; // sharp previews (thumbs.js), made when the store is ready
 
-/** Small JPEG preview when Steam has no thumbnail for a screenshot. */
-async function makeThumb(token, info) {
-  if (thumbCache.has(token)) return thumbCache.get(token);
-  let buf = null;
-  try {
-    let img = null;
-    if (typeof nativeImage.createThumbnailFromPath === 'function') {
-      img = await nativeImage.createThumbnailFromPath(info.path, { width: 480, height: 270 }).catch(() => null);
-    }
-    if (!img || img.isEmpty()) {
-      const full = nativeImage.createFromPath(info.path);
-      img = full.isEmpty() ? null : full.resize({ width: 480, quality: 'good' });
-    }
-    if (img && !img.isEmpty()) buf = img.toJPEG(82);
-  } catch { buf = null; }
-  if (buf) {
-    thumbCache.set(token, buf);
-    if (thumbCache.size > 150) thumbCache.delete(thumbCache.keys().next().value);
-  }
-  return buf;
-}
+const jpegResponse = (buf) => new Response(buf, { status: 200, headers: { 'content-type': 'image/jpeg', 'access-control-allow-origin': '*', 'cache-control': 'no-cache' } });
 
-async function serveShot(token, wantThumb) {
+async function serveShot(token, params) {
   const info = shotTokens.get(token);
   if (!info) return new Response('Not found', { status: 404 });
-  if (wantThumb && info.thumbPath) return serveFile(path.dirname(info.thumbPath), path.basename(info.thumbPath));
-  if (wantThumb) {
-    const buf = await makeThumb(token, info);
-    if (buf) return new Response(buf, { status: 200, headers: { 'content-type': 'image/jpeg', 'access-control-allow-origin': '*', 'cache-control': 'max-age=3600' } });
+  if (params.has('thumb')) {
+    const buf = thumbs ? await thumbs.get(token, info.path, info.mtime, params.get('w')) : null;
+    if (buf) return jpegResponse(buf);
+    if (info.thumbPath) return serveFile(path.dirname(info.thumbPath), path.basename(info.thumbPath));
   }
   return serveFile(path.dirname(info.path), path.basename(info.path));
 }
@@ -223,9 +217,39 @@ async function screenshotsFor(g) {
   if (shotTokens.size > 6000) shotTokens.clear();
   return list.map((item) => {
     const token = crypto.createHash('sha1').update(item.path.toLowerCase()).digest('hex').slice(0, 24);
-    shotTokens.set(token, { path: item.path, thumbPath: item.thumbPath });
-    return { id: token, full: `dl://shot/${token}`, thumb: `dl://shot/${token}?thumb=1`, time: item.time };
+    shotTokens.set(token, { path: item.path, thumbPath: item.thumbPath, mtime: item.time });
+    return { id: token, kind: 'shot', full: `dl://shot/${token}`, thumb: `dl://shot/${token}?thumb=1`, time: item.time };
   });
+}
+
+// ---------------------------------------------------------------- Steam clips (game recording)
+
+const clipTokens = new Map(); // token -> clip ({ dir, sessions, thumb, ... })
+
+async function clipsFor(g) {
+  const meta = library.steamMeta;
+  const list = await listClips({ steamPath: meta && meta.steamPath, accountId: meta && meta.user && meta.user.accountId, appId: g.sourceId });
+  if (clipTokens.size > 3000) clipTokens.clear();
+  return list.map((clip) => {
+    const token = crypto.createHash('sha1').update(`clip:${clip.dir.toLowerCase()}`).digest('hex').slice(0, 24);
+    clipTokens.set(token, clip);
+    return { id: token, kind: 'clip', time: clip.time, duration: clip.duration, thumb: clip.thumb ? `dl://clip/${token}/thumb` : null };
+  });
+}
+
+const CLIP_PIECE_RE = /^[\w.-]{1,120}\.m4s$/i;
+
+/** dl://clip/<token>/thumb  or  dl://clip/<token>/<session>/<piece>.m4s */
+async function serveClip(pathname) {
+  const parts = pathname.replace(/^\//, '').split('/').map((x) => { try { return decodeURIComponent(x); } catch { return ''; } });
+  const clip = clipTokens.get(parts[0]);
+  if (!clip) return new Response('Not found', { status: 404 });
+  if (parts.length === 2 && parts[1] === 'thumb' && clip.thumb) return serveFile(path.dirname(clip.thumb), path.basename(clip.thumb));
+  if (parts.length === 3 && /^\d{1,3}$/.test(parts[1]) && CLIP_PIECE_RE.test(parts[2])) {
+    const dir = clip.sessions[Number(parts[1])];
+    if (dir) return serveFile(dir, parts[2]);
+  }
+  return new Response('Not found', { status: 404 });
 }
 
 // ---------------------------------------------------------------- online status / Xbox
@@ -345,6 +369,7 @@ function registerIpc() {
     library: snapshot(),
     profile: profileInfo(),
     net: netStatus(),
+    update: updater ? updater.snapshot() : null,
     presets: PRESETS,
     system: {
       platform: process.platform,
@@ -493,16 +518,31 @@ function registerIpc() {
     if (g.source !== 'steam') return { steam: false };
     // Screenshots are read from the Steam folder: they work without a Web API key.
     if (!library.steamMeta && library.scanning) await Promise.race([library.scanning.catch(() => {}), new Promise((r) => setTimeout(r, 20000))]);
-    const screenshots = await screenshotsFor(g).catch(() => []);
-    if (!online) return { steam: true, offline: true, screenshots };
+    // Screenshots and clips (Steam game recording) are both on this PC.
+    const [screenshots, clips] = await Promise.all([screenshotsFor(g).catch(() => []), clipsFor(g).catch(() => [])]);
+    if (!online) return { steam: true, offline: true, screenshots, clips };
     const c = await steamCredsReady();
-    if (c.missing) return { steam: true, needsKey: c.missing === 'key', needsId: c.missing === 'id', screenshots };
+    if (c.missing) return { steam: true, needsKey: c.missing === 'key', needsId: c.missing === 'id', screenshots, clips };
     const { key, steamId } = c;
     const [achievements, friends] = await Promise.all([
       steamWeb.achievementsFull(key, steamId, g.sourceId, lang),
       steamWeb.friendsDetail(key, steamId, g.sourceId).catch(() => ({ list: [] })),
     ]);
-    return { steam: true, achievements, friends, screenshots };
+    return { steam: true, achievements, friends, screenshots, clips };
+  });
+  // Everything the window needs to play a clip (pieces, formats, times).
+  handle('clip:manifest', async (token) => {
+    const clip = clipTokens.get(String(token || ''));
+    if (!clip) return { error: 'notFound' };
+    const m = await clipManifest(clip, (i, file) => `dl://clip/${token}/${i}/${encodeURIComponent(file)}`);
+    if (!m.sessions.length) return { error: 'empty' };
+    return m;
+  });
+  handle('clip:showInFolder', async (token) => {
+    const clip = clipTokens.get(String(token || ''));
+    if (!clip) return { error: 'notFound' };
+    const err = await shell.openPath(clip.dir);
+    return err ? { error: 'failed' } : { ok: true };
   });
   handle('shot:showInFolder', async (token) => {
     const info = shotTokens.get(String(token || ''));
@@ -520,6 +560,32 @@ function registerIpc() {
       for (const [id, v] of Object.entries(xbox.friendsSummary(xboxIds))) out[`xbox:${id}`] = v;
     }
     return out;
+  });
+  handle('update:status', async () => updater.snapshot());
+  handle('update:check', async () => {
+    if (!UPDATE_REPO) return { ...updater.snapshot(), error: 'failed' };
+    if (!connectivity.isOnline()) return { ...updater.snapshot(), error: 'offline' };
+    return updater.check({ force: true });
+  });
+  handle('update:download', async () => {
+    if (!connectivity.isOnline()) return { error: 'offline' };
+    return updater.download();
+  });
+  // Starts the downloaded installer the way electron-builder's updater does (silent, same folder,
+  // launcher restarts afterwards) and closes the launcher so it can be replaced.
+  handle('update:install', async () => {
+    const file = updater.readyFile();
+    if (!file) return { error: 'notReady' };
+    try {
+      const child = spawn(file, ['/S', '--updated', '--force-run'], { detached: true, stdio: 'ignore' });
+      child.on('error', (err) => log.error('[update] installer did not start', err));
+      child.unref();
+    } catch (err) {
+      log.error('[update] installer did not start', err);
+      return { error: 'failed' };
+    }
+    setTimeout(() => app.quit(), 400);
+    return { ok: true };
   });
   handle('net:status', async () => netStatus());
   handle('net:check', async () => { await connectivity.check(); return netStatus(); });
@@ -757,6 +823,19 @@ function wireEvents() {
     if (key && steamId) setTimeout(() => { if (connectivity.isOnline()) steamWeb.buildFriendsIndex(key, steamId).catch(() => {}); }, 15000);
     if (store.settings.xblApiKey) setTimeout(() => { if (connectivity.isOnline()) xbox.indexFriends(store.settings.xblApiKey).catch(() => {}); }, 20000);
   });
+  updater.on('change', (s) => send('update:status', s));
+  // Look for a new version a little after start-up, then every hour (GitHub is asked at most
+  // every 6 hours). A newer version is announced once.
+  const autoCheck = async () => {
+    if (!UPDATE_REPO || !store.settings.checkForUpdates || !connectivity.isOnline()) return;
+    await updater.check();
+    if (updater.shouldAnnounce()) {
+      send('update:announce', updater.snapshot());
+      updater.markAnnounced();
+    }
+  };
+  setTimeout(() => autoCheck().catch(() => {}), 25000).unref();
+  setInterval(() => autoCheck().catch(() => {}), 60 * 60 * 1000).unref();
   connectivity.on('change', (state, prev) => {
     send('net:status', netStatus());
     if (state.online && !prev.online) {
@@ -814,6 +893,7 @@ if (!app.requestSingleInstanceLock()) {
     Menu.setApplicationMenu(null);
     store = new Store(app.getPath('userData'));
     await store.load();
+    thumbs = new Thumbs({ dir: store.dirs.thumbs, nativeImage });
     connectivity = new Connectivity({
       fetch: (url, opts) => net.fetch(url, opts),
       getMode: () => store.settings.onlineMode,
@@ -827,6 +907,7 @@ if (!app.requestSingleInstanceLock()) {
     steamWeb = new SteamWeb({ store, fetch: fetchFn, log, onFriendsBuilt: () => send('steam:friends') });
     xbox = new XboxLive({ store, fetch: fetchFn, log });
     library = new Library({ store, probe: runProbe, artwork, steamWeb, xbox, isOnline, log });
+    updater = new Updater({ repo: UPDATE_REPO, currentVersion: app.getVersion(), fetch: fetchFn, store, tempDir: app.getPath('temp'), log });
     sessions = new Sessions({
       openExternal: (url) => shell.openExternal(url),
       openPath: (p) => shell.openPath(p),
@@ -849,7 +930,8 @@ if (!app.requestSingleInstanceLock()) {
     });
     protocol.handle('dl', (req) => {
       const u = new URL(req.url);
-      if (u.host === 'shot') return serveShot(u.pathname.replace(/^\//, ''), u.searchParams.has('thumb'));
+      if (u.host === 'shot') return serveShot(u.pathname.replace(/^\//, ''), u.searchParams);
+      if (u.host === 'clip') return serveClip(u.pathname);
       const roots = { art: store.dirs.art, media: store.dirs.media };
       const root = roots[u.host];
       const rel = decodePath(u);
@@ -861,6 +943,7 @@ if (!app.requestSingleInstanceLock()) {
     wireEvents();
     createWindow();
     startTimers();
+    setTimeout(() => { if (thumbs) thumbs.prune().catch(() => {}); }, 60000).unref();
     connectivity.start();
     // Know online/offline before the first scan (at most a few seconds), so nothing that needs
     // the internet is attempted, and remembered as failed, while there is none.

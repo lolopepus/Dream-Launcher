@@ -123,13 +123,14 @@
 .tile.sel.no-art .fallback { font-size: 30px; padding: 24px; }
 .tile-shade { position: absolute; inset: 0; background: linear-gradient(0deg, rgba(0, 0, 0, 0.45), transparent 38%); pointer-events: none; }
 .tile-badges { position: absolute; left: 10px; bottom: 10px; right: 10px; display: flex; gap: 6px; flex-wrap: wrap; }
-.tile.sel .tile-badges { top: 16px; left: 16px; bottom: auto; }
+/* The store badge stays in the same corner when a tile is selected, so it never jumps. */
+.tile.sel .tile-badges { left: 16px; bottom: 16px; }
 .tile-status {
   position: absolute; left: 10px; right: 10px; bottom: 42px; padding: 8px 10px; border-radius: 12px;
   background: rgba(20, 20, 28, 0.62); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
   font-size: 12px; font-weight: 700;
 }
-.tile.sel .tile-status { left: 16px; right: auto; min-width: 200px; bottom: 16px; }
+.tile.sel .tile-status { left: 16px; right: auto; min-width: 200px; bottom: 54px; }
 .tile-status .prog { display: block; height: 5px; border-radius: 3px; background: rgba(255, 255, 255, 0.25); margin-top: 6px; overflow: hidden; }
 .tile-status .prog i { display: block; height: 100%; background: #fff; border-radius: 3px; transition: width 0.6s ease; }
 .tile-dot { position: absolute; top: 10px; right: 10px; width: 16px; height: 16px; border-radius: 50%; background: var(--blue); box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.85); }
@@ -250,6 +251,21 @@
 #dashboard.hub-compact .friends-facts { display: none; }
 
 /* ------------------------------------------------------------------ footer */
+/* "there is more below": bobbing arrow between the game row and the footer */
+.hub-peek {
+  position: absolute; left: 50%; bottom: 64px; height: 36px; padding: 0 16px 0 10px; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 6px; border-radius: 999px; color: rgba(255, 255, 255, 0.82);
+  font-size: 16px; font-weight: 600; background: rgba(255, 255, 255, 0.08);
+  opacity: 0; visibility: hidden; transition: opacity 0.4s ease, background 0.2s ease, visibility 0s 0.4s;
+}
+.hub-peek:not(:has(.peek-text)) { padding: 0 10px; }
+.hub-peek.show { opacity: 1; visibility: visible; transition: opacity 0.6s ease 0.8s, background 0.2s ease, visibility 0s; }
+.hub-peek:hover { background: rgba(255, 255, 255, 0.16); }
+.peek-arrow { display: grid; place-items: center; width: 24px; height: 24px; animation: peek-bob 1.8s ease-in-out infinite; }
+.peek-arrow svg { width: 22px; height: 22px; }
+@keyframes peek-bob { 0%, 100% { transform: translateY(-3px); } 50% { transform: translateY(4px); } }
+#dashboard.hub-open .hub-peek, #dashboard.empty .hub-peek { opacity: 0; visibility: hidden; transition: opacity 0.2s ease, visibility 0s 0.2s; }
+.reduce-motion .peek-arrow { animation: none; }
 .footer { position: absolute; left: 88px; right: 88px; bottom: 40px; display: flex; align-items: center; justify-content: space-between; }
 
 /* ------------------------------------------------------------------ entrance after the intro */
@@ -297,3 +313,10 @@ body.revealed .tile:hover:not(.sel) { transform: translateY(-4px); }
 
 /* Xbox gamerscore under the achievement bar */
 .ach-gs { font-size: 15px; font-weight: 650; color: rgba(255, 255, 255, 0.7); margin-top: -2px; }
+
+/* Options button: dot while a newer version is available */
+#btn-options { position: relative; }
+#btn-options.has-update::after {
+  content: ''; position: absolute; top: 7px; right: 7px; width: 13px; height: 13px; border-radius: 50%;
+  background: #ff9f0a; box-shadow: 0 0 0 2.5px rgba(14, 16, 30, 0.85);
+}

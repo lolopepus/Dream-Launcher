@@ -673,7 +673,25 @@
       else if (game.source === 'xbox' && online) peek = 'hub.peekXbox';
       right.appendChild(DL.glyphs.hint('down', DL.t(peek), () => openHub()));
     }
+    renderPeek(game);
     if (rowGames.length) right.appendChild(DL.glyphs.hint('info', DL.t(infoVisible() ? 'hints.hideInfo' : 'hints.showInfo'), toggleInfo));
+  }
+
+  /**
+   * A small bobbing arrow under the game row showing that there is more below (the slide-down
+   * panel). It names what is there until the panel has been opened a few times.
+   */
+  const PEEK_KEY = 'dl.hubOpened';
+  const peekSeen = () => { try { return Number(localStorage.getItem(PEEK_KEY)) || 0; } catch { return 0; } };
+  function renderPeek(game) {
+    const btn = DL.$('#hub-peek');
+    if (!btn) return;
+    const show = !!game && !(DL.hub && DL.hub.isOpen());
+    btn.classList.toggle('show', show);
+    btn.textContent = '';
+    btn.appendChild(el('span', { class: 'peek-arrow' }, DL.icon('chevronDown')));
+    if (show && peekSeen() < 3) btn.appendChild(el('span', { class: 'peek-text', text: DL.t('hub.peekMore') }));
+    btn.setAttribute('aria-label', DL.t('hub.peekMore'));
   }
 
   function toggleInfo() {
@@ -693,6 +711,7 @@
     if (!game || !DL.hub || DL.hub.isOpen()) return;
     if (DL.nav.top() !== scope) return;
     DL.hub.open(game);
+    try { localStorage.setItem(PEEK_KEY, String(peekSeen() + 1)); } catch { /* not kept */ }
     root.classList.add('hub-open');
     document.body.classList.add('hub-open');
     DL.waves.setMode('hub');
@@ -872,7 +891,7 @@
     root = DL.$('#dashboard');
     rowEl = DL.$('#row');
     const peek = DL.$('#hub-peek');
-    if (peek) peek.remove();
+    if (peek) peek.addEventListener('click', () => { if (DL.hub && DL.hub.isOpen()) closeHub(); else openHub(); });
     const netBtn = DL.$('#btn-net');
     if (netBtn) netBtn.addEventListener('click', () => DL.net.open());
     renderNet();
@@ -916,6 +935,13 @@
 
     DL.bus.on('library', () => { renderRow(); DL.nav.refresh(); });
     DL.bus.on('net', () => { renderNet(); renderHero(); renderHints(); DL.nav.refresh(); });
+    // A dot on the Options button while a newer version is waiting.
+    const renderUpdateDot = () => {
+      const btn = DL.$('#btn-options');
+      if (btn) btn.classList.toggle('has-update', !!(DL.state.update && DL.state.update.latest));
+    };
+    DL.bus.on('update', renderUpdateDot);
+    renderUpdateDot();
     DL.bus.on('settings', (patch) => {
       if (patch && 'showGameInfo' in patch) DL.state.infoToggled = false;
       renderRow();

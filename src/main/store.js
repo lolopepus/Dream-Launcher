@@ -15,6 +15,8 @@ class Store {
       art: path.join(dataDir, 'art'),
       media: path.join(dataDir, 'media'),
       avatar: path.join(dataDir, 'avatar'),
+      // Sharp screenshot previews, made once per size (see main.js).
+      thumbs: path.join(dataDir, 'thumbs'),
     };
     this.settings = sanitizeSettings({});
     this.overrides = {};
@@ -23,6 +25,7 @@ class Store {
     this.libraryCache = null;
     this.steamWeb = {};
     this.xbox = {};
+    this.update = {};
     this.device = null;
     this.sizes = {};
     this._timers = new Map();
@@ -48,6 +51,8 @@ class Store {
     this.steamWeb = sw && typeof sw === 'object' && !Array.isArray(sw) ? sw : {};
     const xb = await readJson(this.file('xbox.json'));
     this.xbox = xb && typeof xb === 'object' && !Array.isArray(xb) ? xb : {};
+    const up = await readJson(this.file('update.json'));
+    this.update = up && typeof up === 'object' && !Array.isArray(up) ? up : {};
     const dev = await readJson(this.file('device.json'));
     this.device = dev && typeof dev === 'object' && !Array.isArray(dev) ? dev : null;
     const sizes = await readJson(this.file('sizes.json'));
@@ -79,6 +84,7 @@ class Store {
       libraryCache: ['library-cache.json', () => this.libraryCache],
       steamWeb: ['steamweb.json', () => this.steamWeb],
       xbox: ['xbox.json', () => this.xbox],
+      update: ['update.json', () => this.update],
       device: ['device.json', () => this.device],
       sizes: ['sizes.json', () => this.sizes],
     };

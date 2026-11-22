@@ -74,6 +74,9 @@
       if (action === 'lbrb') {
         return DL.el('span', { class: 'glyph-pair' }, DL.glyphs.render('lb'), DL.glyphs.render('rb'));
       }
+      if (action === 'ltrt') {
+        return DL.el('span', { class: 'glyph-pair' }, DL.glyphs.render('lt'), DL.glyphs.render('rt'));
+      }
       if (DPAD[action] && kind !== 'keyboard') {
         const n = DL.el('span', { class: 'glyph round dpad' });
         n.appendChild(DL.svg(DPAD[action]));

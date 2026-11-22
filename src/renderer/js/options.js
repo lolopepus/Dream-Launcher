@@ -50,6 +50,7 @@
         ui.toggleRow({ label: t('options.restoreAfterPlaying'), desc: t('options.restoreAfterPlayingDesc'), get: () => S().restoreAfterPlaying, set: (v) => set({ restoreAfterPlaying: v }) }),
         ui.toggleRow({ label: t('options.confirmExit'), get: () => S().confirmExit, set: (v) => set({ confirmExit: v }) }),
         ui.toggleRow({ label: t('net.offlineMode'), desc: t('net.offlineModeDesc'), get: () => S().onlineMode === 'offline', set: (v) => set({ onlineMode: v ? 'offline' : 'auto' }) }),
+        ui.toggleRow({ label: t('update.auto'), desc: t('update.autoDesc'), get: () => S().checkForUpdates, set: (v) => set({ checkForUpdates: v }) }),
         ui.actionRow({ label: t('options.quit'), icon: 'quit', danger: true, onClick: () => DL.api.quit() }),
       ];
     },
@@ -177,6 +178,7 @@
     accounts() {
       const sec = () => S().secrets || {};
       return [
+        ui.actionRow({ label: t('keysTip.whatFor'), desc: t('keysTip.whatForDesc'), icon: 'info', onClick: () => DL.keysTip.open() }),
         ui.sectionTitle('Steam'),
         ui.textRow({
           label: t('accounts.steamKey'), desc: t('accounts.steamKeyDesc'),
@@ -248,6 +250,7 @@
           el('img', { class: 'about-logo', attrs: { src: 'img/logo.svg', alt: '' } }),
           el('div', { class: 'about-name', text: 'Dream Launcher' }),
           el('div', { class: 'about-version', text: t('about.version', { v: sys.version || '0.1.0' }) })),
+        ...updateRows(),
         ui.infoRow({ label: t('about.device'), value: (sys.device && sys.device.name) || '-' }),
         ui.infoRow({ label: 'Electron', value: sys.electron || '-' }),
         ui.infoRow({ label: 'Chromium', value: sys.chrome || '-' }),
@@ -296,6 +299,85 @@
     DL.state.settings = settings;
     DL.bus.emit('settings', settings.language !== prevLang ? { language: settings.language, all: true } : { all: true });
     refreshProfile();
+  }
+
+  // ---------------------------------------------------------------- updates (About)
+  const U = () => DL.state.update || { status: 'idle', latest: null };
+  const pct = (u) => (u.progress && u.progress.total ? Math.floor((u.progress.received / u.progress.total) * 100) : 0);
+
+  function updateStatusText(u) {
+    if (u.status === 'checking') return t('update.checking');
+    if (u.status === 'downloading') return t('update.downloading', { p: pct(u) });
+    if (u.status === 'ready') return t('update.ready');
+    if (u.status === 'available' && u.latest) return t('update.available', { v: u.latest.version });
+    if (u.error === 'offline') return t('update.offline');
+    if (u.status === 'upToDate') return t('update.upToDate');
+    if (u.error === 'rateLimited') return t('update.rateLimited');
+    if (u.error) return t('update.failed');
+    return '';
+  }
+
+  /** Which rows exist: rebuild when this changes, otherwise only update the values. */
+  const updateShape = (u) => `${u.latest ? u.latest.version : ''}|${u.status === 'ready'}`;
+
+  function updateRows() {
+    const u = U();
+    const check = ui.actionRow({ label: t('update.check'), icon: 'refresh', value: updateStatusText(u), onClick: () => checkForUpdates(check) });
+    check._dlUpdate = () => check._dlSetValue(updateStatusText(U()));
+    const rows = [check];
+    if (u.latest) {
+      const v = u.latest.version;
+      const size = u.latest.asset ? DL.fmt.bytes(u.latest.asset.size) : '';
+      const get = ui.actionRow({
+        label: t(u.status === 'ready' ? 'update.installNowLabel' : 'update.downloadLabel', { v }),
+        desc: t(u.latest.asset ? 'update.downloadDesc' : 'update.noInstaller'),
+        icon: 'download',
+        value: u.status === 'downloading' ? `${pct(u)} %` : size,
+        onClick: () => (U().status === 'ready' ? installUpdate() : downloadUpdate()),
+      });
+      get._dlUpdate = () => { const now = U(); get._dlSetValue(now.status === 'downloading' ? `${pct(now)} %` : size); };
+      rows.push(get);
+      rows.push(ui.actionRow({ label: t('update.whatsNew', { v }), value: 'github.com', onClick: () => DL.api.openExternal(U().latest.url) }));
+    }
+    return rows;
+  }
+
+  async function checkForUpdates(row) {
+    if (DL.state.net.online === false) { DL.toast({ title: t('update.offline'), icon: 'wifiOff' }); return; }
+    if (row) row._dlSetValue(t('update.checking'));
+    const res = await DL.api.updateCheck();
+    if (res && !res.error && res.status) {
+      DL.state.update = res;
+      DL.bus.emit('update', res);
+    }
+    const u = U();
+    if (res && res.error === 'offline') DL.toast({ title: t('update.offline'), icon: 'wifiOff' });
+    else if (u.status === 'upToDate') DL.toast({ title: t('update.upToDateToast', { v: u.current }), icon: 'check', tone: 'good' });
+    else if (u.status === 'error') DL.toast({ title: t('update.failed'), icon: 'warn', tone: 'error' });
+  }
+
+  async function downloadUpdate() {
+    if (DL.state.net.online === false) { DL.toast({ title: t('net.needsInternet'), sub: t('net.needsInternetText'), icon: 'wifiOff' }); return; }
+    if (!U().latest || !U().latest.asset) { DL.api.openExternal(U().latest ? U().latest.url : ''); return; }
+    if (U().status === 'downloading') return;
+    const res = await DL.api.updateDownload();
+    if (res && res.ok) { await installUpdate(); return; }
+    const code = res && ['offline', 'checksum', 'incomplete', 'noInstaller'].includes(res.error) ? res.error : 'failed';
+    DL.toast({ title: t(`update.error.${code}`), icon: 'warn', tone: 'error' });
+  }
+
+  async function installUpdate() {
+    const v = U().latest ? U().latest.version : '';
+    const c = await ui.confirm({
+      title: t('update.installTitle', { v }),
+      message: t('update.installText'),
+      // You just asked for the update: "Install now" is selected first.
+      buttons: [{ id: 'ok', label: t('update.installNow'), primary: true }, { id: 'later', label: t('update.later') }],
+    });
+    if (c !== 'ok') return;
+    const res = await DL.api.updateInstall();
+    if (res && res.ok) DL.toast({ title: t('update.installing'), sub: t('update.installingText'), icon: 'download', duration: 8000 });
+    else DL.toast({ title: t('update.error.failed'), icon: 'warn', tone: 'error' });
   }
 
   const RESETTABLE = ['general', 'display', 'sound', 'controllers', 'library', 'accounts'];
@@ -406,7 +488,7 @@
         sheet.close(true);
       },
       hints: [['confirm', t('hints.select')], ['lb', t('hints.sections')], ['back', t('hints.back')]],
-      onClose: () => { current = null; offSettings(); offLib(); offPads(); offLang(); offDevice(); },
+      onClose: () => { current = null; offSettings(); offLib(); offPads(); offLang(); offDevice(); offUpdate(); },
     });
     current = sheet;
 
@@ -427,6 +509,27 @@
     const offLib = DL.bus.on('library', () => { if (!sheet.closed) rerender(); });
     const offPads = DL.bus.on('gamepads', () => { if (!sheet.closed && section === 'controllers') { renderContent(); DL.nav.refresh(); } });
     const offDevice = DL.bus.on('device', () => { if (!sheet.closed && (section === 'display' || section === 'about')) { renderContent(); DL.nav.refresh(); } });
+    let lastUpdateShape = updateShape(U());
+    const offUpdate = DL.bus.on('update', () => {
+      if (sheet.closed || section !== 'about') { lastUpdateShape = updateShape(U()); return; }
+      const shape = updateShape(U());
+      if (shape === lastUpdateShape) {
+        for (const row of content.querySelectorAll('.opt-row')) if (row._dlUpdate) row._dlUpdate();
+        return;
+      }
+      lastUpdateShape = shape;
+      // Rows changed (e.g. an update was found): rebuild, keep the focus on the same row.
+      const f = DL.nav.focused();
+      const label = f && f.querySelector && f.querySelector('.row-label') ? f.querySelector('.row-label').textContent : null;
+      const onCheck = label === t('update.check');
+      renderContent();
+      DL.nav.refresh();
+      if (label) {
+        const again = [...content.querySelectorAll('[data-nav]')].find((n) => (n.querySelector('.row-label') || {}).textContent === label)
+          || (onCheck ? null : content.querySelector('.opt-row'));
+        if (again) DL.nav.focus(again, { sound: false, force: true });
+      }
+    });
     const offLang = DL.bus.on('language', () => {
       if (sheet.closed) return;
       sheet.title.textContent = t('options.title');
