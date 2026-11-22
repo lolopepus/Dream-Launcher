@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' dl: https: data: blob:; media-src 'self' dl: blob: data:; font-src 'self' data:; connect-src 'self' dl:; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dream Launcher</title>
+  <link rel="icon" href="img/icon-256.png">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/dashboard.css">
+  <link rel="stylesheet" href="css/overlays.css">
+</head>
+<body>
+  <!-- Background (full window, not scaled) -->
+  <div id="bg" aria-hidden="true">
+    <div id="bg-base"></div>
+    <div id="bg-glow"></div>
+    <canvas id="waves"></canvas>
+    <div id="hero-art"><div class="hero-layer"></div><div class="hero-layer"></div></div>
+    <div id="bg-scrim"></div>
+    <div id="bg-hubscrim"></div>
+  </div>
+
+  <!-- Interface, designed at 1920x1080 and scaled to the window -->
+  <div id="stage">
+    <main id="dashboard">
+      <header class="topbar">
+        <div id="clock-block" class="clock-block" aria-live="off"></div>
+        <div class="top-right">
+          <div id="battery-pill" class="battery-pill glass" hidden></div>
+          <button id="btn-net" class="icon-btn glass net-btn" data-nav></button>
+          <button id="btn-search" class="icon-btn glass" data-nav data-i18n-label="hints.search"></button>
+          <button id="btn-import" class="icon-btn glass" data-nav data-i18n-label="importer.title"></button>
+          <button id="btn-options" class="icon-btn glass" data-nav data-i18n-label="options.title"></button>
+        </div>
+      </header>
+
+      <section id="hero" class="hero">
+        <div class="hero-tags"></div>
+        <div class="hero-titlebox">
+          <img class="hero-logo" alt="" draggable="false" hidden>
+          <h1 class="hero-title"></h1>
+        </div>
+        <div class="hero-meta"></div>
+        <div class="hero-actions">
+          <button id="btn-play" class="btn-play" data-nav></button>
+          <button id="btn-more" class="btn-round glass" data-nav data-i18n-label="hints.gameOptions"></button>
+        </div>
+      </section>
+
+      <section id="row" class="row"></section>
+
+      <button id="hub-peek" class="hub-peek" type="button" tabindex="-1"></button>
+      <section id="hub" class="hub" aria-hidden="true"></section>
+
+      <footer class="footer">
+        <div id="hints" class="hints"></div>
+        <div id="hints-right" class="hints"></div>
+      </footer>
+    </main>
+    <div id="overlays"></div>
+    <div id="toast-host"></div>
+    <div id="launch-overlay"></div>
+  </div>
+
+  <!-- Start-up screen -->
+  <div id="intro">
+    <div class="intro-veil"></div>
+    <div class="intro-light"></div>
+    <div class="intro-center">
+      <div class="intro-logo-wrap">
+        <img class="intro-logo" src="img/logo.svg" alt="" draggable="false">
+        <i class="intro-shine"></i>
+      </div>
+      <div class="intro-name" aria-label="Dream Launcher"></div>
+      <div class="intro-wait"><i></i></div>
+    </div>
+    <i class="intro-bar top"></i>
+    <i class="intro-bar bottom"></i>
+  </div>
+
+  <script src="js/locales/en.js"></script>
+  <script src="js/locales/de.js"></script>
+  <script src="js/locales/pl.js"></script>
+  <script src="js/core.js"></script>
+  <script src="js/i18n.js"></script>
+  <script src="js/sound.js"></script>
+  <script src="js/waves.js"></script>
+  <script src="js/glyphs.js"></script>
+  <script src="js/nav.js"></script>
+  <script src="js/input.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/actions.js"></script>
+  <script src="js/dashboard.js"></script>
+  <script src="js/hub.js"></script>
+  <script src="js/net.js"></script>
+  <script src="js/library.js"></script>
+  <script src="js/gamemenu.js"></script>
+  <script src="js/options.js"></script>
+  <script src="js/importer.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

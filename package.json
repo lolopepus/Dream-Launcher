@@ -1,0 +1,52 @@
+{
+  "name": "dream-launcher",
+  "productName": "Dream Launcher",
+  "version": "2.2.1",
+  "description": "A controller-friendly launcher for all your PC games, storefronts and emulators.",
+  "main": "src/main/main.js",
+  "author": "Dream Launcher",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test",
+    "dist": "electron-builder --win nsis --x64",
+    "dist:dir": "electron-builder --win dir --x64"
+  },
+  "devDependencies": {
+    "electron": "^45.3.3",
+    "electron-builder": "^26.15.0"
+  },
+  "build": {
+    "appId": "com.dreamlauncher.app",
+    "productName": "Dream Launcher",
+    "copyright": "Dream Launcher",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Dream Launcher"
+    }
+  }
+}

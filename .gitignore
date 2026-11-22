@@ -1,0 +1,8 @@
+node_modules/
+dist/
+*.log
+.DS_Store
+Thumbs.db
+
+# Licensed music (Uppbeat): only shipped inside the installer, never as a file in the repo
+src/renderer/audio/memory-loop.mp3
