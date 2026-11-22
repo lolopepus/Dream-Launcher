@@ -120,7 +120,10 @@ async function scanEmulator(emu, env = process.env) {
       tracksOwnPlaytime: false,
     });
   }
-  if (isCemu(emu)) await applyCemuPlaytime(emu, games, env);
+  if (isCemu(emu)) {
+    for (const g of games) g.cemu = true;
+    await applyCemuPlaytime(emu, games, env);
+  }
   return { emulator: emu, games, error: null };
 }
 

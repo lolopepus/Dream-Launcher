@@ -89,6 +89,7 @@
       xboxTitleId: extra.xboxTitleId || '',
       xboxAchievements: extra.xboxAch || null,
       platform: extra.platform || '',
+      screenshotSource: source === 'steam' ? 'steam' : (extra.known === 'cemu' ? 'cemu' : null),
       installPath: installed ? `D:\\Games\\${name}` : '',
       favorite: i === 2,
       hidden: false,
@@ -223,6 +224,10 @@
       const g = games.find((x) => x.id === id);
       if (!g) return { error: 'notFound' };
       const i = games.indexOf(g);
+      if (g.screenshotSource === 'cemu') {
+        const shots = Array.from({ length: 5 }, (_, k) => { const url = art(i * 5 + k + 40, 1920, 1080); return { id: `cemu-${k}`, kind: 'shot', full: url, thumb: url, time: now - k * 5 * 3600e3 }; });
+        return { steam: false, cemu: true, screenshots: shots };
+      }
       if (g.source === 'xbox') {
         if (isOffline()) return { xbox: true, offline: true };
         if (window.DL_MOCK_NOXBOX) return { xbox: true, needsXboxKey: true };

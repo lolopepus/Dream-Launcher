@@ -671,6 +671,7 @@
       let peek = 'hub.peek';
       if (game.source === 'steam') peek = online ? 'hub.peekSteam' : 'hub.peekSteamOffline';
       else if (game.source === 'xbox' && online) peek = 'hub.peekXbox';
+      else if (game.screenshotSource === 'cemu') peek = 'hub.peekCemu';
       right.appendChild(DL.glyphs.hint('down', DL.t(peek), () => openHub()));
     }
     renderPeek(game);

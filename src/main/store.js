@@ -148,6 +148,20 @@ class Store {
     this.save('playtime');
   }
 
+  /**
+   * Remembers when a game was played (start and end), so screenshots that don't say which game
+   * they're from (Cemu) can be matched by time. Keeps the newest 300 per game.
+   */
+  addSession(id, start, end) {
+    if (!(start > 0) || !(end > start)) return;
+    const cur = this.playtime[id] || { minutes: 0, lastPlayed: 0 };
+    const list = Array.isArray(cur.sessions) ? cur.sessions : [];
+    list.push([Math.round(start), Math.round(end)]);
+    cur.sessions = list.slice(-300);
+    this.playtime[id] = cur;
+    this.save('playtime');
+  }
+
   markPlayed(id, when) {
     const cur = this.playtime[id] || { minutes: 0, lastPlayed: 0 };
     cur.lastPlayed = Math.max(cur.lastPlayed || 0, when || Date.now());

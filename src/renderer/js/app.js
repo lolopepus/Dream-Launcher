@@ -89,7 +89,7 @@
     DL.api.on('update:announce', (u) => {
       DL.state.update = u;
       DL.bus.emit('update', u);
-      if (u && u.latest) DL.toast({ title: DL.t('update.toastTitle', { v: u.latest.version }), sub: DL.t('update.toastText'), icon: 'download', duration: 7000 });
+      if (u && u.latest) announceWhenFree(u.latest.version);
     });
     DL.api.on('steam:friends', () => { DL.state.details.clear(); loadFriends(); if (DL.hub) { DL.hub.invalidate(); DL.hub.reload(); } });
     DL.api.on('app:focus', (focused) => { if (focused) DL.input.startPolling(); });
@@ -116,6 +116,17 @@
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) DL.music.pause('hidden'); else DL.music.resume('hidden');
     });
+  }
+
+  /**
+   * The "update available" notice waits until the home screen is free: after the intro, and
+   * after the API keys window or any other window is closed, so it isn't hidden behind them.
+   */
+  function announceWhenFree(version, tries = 0) {
+    const top = DL.nav.top();
+    const free = !document.getElementById('intro') && top && top.id === 'dashboard' && !DL.state.gameRunning;
+    if (!free && tries < 600) { setTimeout(() => announceWhenFree(version, tries + 1), 1000); return; }
+    DL.toast({ title: DL.t('update.toastTitle', { v: version }), sub: DL.t('update.toastText'), icon: 'download', duration: 7000 });
   }
 
   function applyMotionClasses() {

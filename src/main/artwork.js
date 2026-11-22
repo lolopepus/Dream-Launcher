@@ -23,6 +23,22 @@ const INDEX_VERSION = 3;
 // Entries written by these older versions are still valid; only missing pieces are fetched.
 const COMPATIBLE_VERSIONS = [2, 3];
 const RETRY_MS = 3 * 24 * 60 * 60 * 1000;
+
+// Games whose store name has no SteamGridDB entry: the entry to use instead.
+const SGDB_ALIASES = new Map([
+  ['minecraft for windows', 'Minecraft'],
+  ['minecraft for windows 10', 'Minecraft'],
+  ['minecraft windows 10 edition', 'Minecraft'],
+  ['minecraft: windows 10 edition', 'Minecraft'],
+]);
+// Raised when the names searched for change, so the games concerned are looked up again at once.
+const SEARCH_V = 2;
+
+/** The name to search SteamGridDB for. */
+function sgdbName(name) {
+  const key = String(name || '').replace(/[®™©]/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
+  return SGDB_ALIASES.get(key) || String(name || '');
+}
 const CONCURRENCY = 4;
 const SGDB = 'https://www.steamgriddb.com/api/v2';
 
@@ -111,7 +127,7 @@ class Artwork extends EventEmitter {
     };
   }
 
-  needsWork(id, force) {
+  needsWork(id, force, game) {
     if (force) return true;
     const e = this.store.artIndex[id];
     if (!e || e.v !== INDEX_VERSION) return true;
@@ -119,6 +135,8 @@ class Artwork extends EventEmitter {
     if (!this.isOnline() && !e.triedAt) return false;
     if (e.cover && e.hero && e.logo) return false;
     const hasKey = !!(this.ctx.settings && this.ctx.settings.sgdbApiKey);
+    // Searched under another SteamGridDB name now (e.g. Minecraft for Windows): look again.
+    if (hasKey && game && sgdbName(game.name) !== game.name && (e.searchV || 0) < SEARCH_V) return true;
     if (hasKey && !e.withSgdb) return true;
     if (e.cover && e.hero && !hasKey) return false;
     return Date.now() - (e.triedAt || 0) > RETRY_MS;
@@ -128,7 +146,7 @@ class Artwork extends EventEmitter {
     this.ctx = { ...this.ctx, ...ctx };
     for (const g of games) {
       if (!g || !g.id || this.queued.has(g.id)) continue;
-      if (!this.needsWork(g.id, force)) continue;
+      if (!this.needsWork(g.id, force, g)) continue;
       this.queued.add(g.id);
       this.queue.push({ game: g, force });
     }
@@ -235,6 +253,7 @@ class Artwork extends EventEmitter {
       v: INDEX_VERSION,
       triedAt: complete ? Date.now() : (prev.triedAt || 0),
       withSgdb: (withSgdb && complete) || !!prev.withSgdb,
+      searchV: withSgdb && complete ? SEARCH_V : (prev.searchV || 0),
     };
     this._changed();
   }
@@ -314,8 +333,14 @@ class Artwork extends EventEmitter {
       if (d && d.success && d.data && d.data.id) found = d.data.id;
     }
     if (!found) {
-      const d = await this._getJson(`${SGDB}/search/autocomplete/${encodeURIComponent(game.name)}`, headers);
-      if (d && d.success && Array.isArray(d.data) && d.data.length) found = d.data[0].id;
+      // Store names like "… for Windows" often have no entry: then the plain name is tried.
+      const names = [sgdbName(game.name)];
+      const plain = names[0].replace(/\s*(?:for windows(?: 10| 11)?|windows(?: 10| 11)? edition|\(pc\)|pc edition)\s*$/i, '').trim();
+      if (plain && plain !== names[0]) names.push(plain);
+      for (const name of names) {
+        const d = await this._getJson(`${SGDB}/search/autocomplete/${encodeURIComponent(name)}`, headers);
+        if (d && d.success && Array.isArray(d.data) && d.data.length) { found = d.data[0].id; break; }
+      }
     }
     if (found) this.sgdbIds.set(game.id, found);
     return found;
@@ -383,4 +408,6 @@ class Artwork extends EventEmitter {
   }
 }
 
-module.exports = { Artwork, findSteamCached, fileBase, extFromType, steamCdnUrls };
+module.exports = {
+  sgdbName, Artwork, findSteamCached, fileBase, extFromType, steamCdnUrls,
+};

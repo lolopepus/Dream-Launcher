@@ -30,6 +30,7 @@ const { runProbe, listProcesses, listProcessNames, detectDevice } = require('./u
 const { classifyDevice } = require('./device');
 const { steamScreenshots } = require('./screenshots');
 const { listClips, clipManifest } = require('./clips');
+const { cemuScreenshots, matchShots } = require('./cemu');
 const { Thumbs } = require('./thumbs');
 const { PRESETS } = require('./emulator-presets');
 const { sanitizeSettings, sanitizeOverrides, SECRET_KEYS, sectionDefaults } = require('./defaults');
@@ -211,9 +212,24 @@ async function serveShot(token, params) {
   return serveFile(path.dirname(info.path), path.basename(info.path));
 }
 
+/** Cemu screenshots of this game, matched by the times it was played (see cemu.js). */
+async function cemuShotsFor(g) {
+  const exe = g.launch && g.launch.path;
+  if (!exe) return [];
+  const all = await cemuScreenshots(exe, process.env);
+  if (!all.length) return [];
+  const siblings = library.raw.filter((x) => x.cemu && x.emulatorId === g.emulatorId && !store.getOverride(x.id).hidden);
+  const tracked = store.playtime[g.id];
+  return matchShots(all, tracked && tracked.sessions, { onlyGame: siblings.length === 1 });
+}
+
 async function screenshotsFor(g) {
-  const meta = library.steamMeta;
-  const list = await steamScreenshots(meta && meta.steamPath, meta && meta.user && meta.user.accountId, g.sourceId);
+  let list;
+  if (g.cemu) list = await cemuShotsFor(g);
+  else {
+    const meta = library.steamMeta;
+    list = await steamScreenshots(meta && meta.steamPath, meta && meta.user && meta.user.accountId, g.sourceId);
+  }
   if (shotTokens.size > 6000) shotTokens.clear();
   return list.map((item) => {
     const token = crypto.createHash('sha1').update(item.path.toLowerCase()).digest('hex').slice(0, 24);
@@ -515,6 +531,7 @@ function registerIpc() {
     const g = gameOrError(id);
     const online = connectivity.isOnline();
     if (g.source === 'xbox') return xboxHub(g, lang, online);
+    if (g.cemu) return { steam: false, cemu: true, screenshots: await screenshotsFor(g).catch(() => []) };
     if (g.source !== 'steam') return { steam: false };
     // Screenshots are read from the Steam folder: they work without a Web API key.
     if (!library.steamMeta && library.scanning) await Promise.race([library.scanning.catch(() => {}), new Promise((r) => setTimeout(r, 20000))]);
@@ -824,21 +841,25 @@ function wireEvents() {
     if (store.settings.xblApiKey) setTimeout(() => { if (connectivity.isOnline()) xbox.indexFriends(store.settings.xblApiKey).catch(() => {}); }, 20000);
   });
   updater.on('change', (s) => send('update:status', s));
-  // Look for a new version a little after start-up, then every hour (GitHub is asked at most
-  // every 6 hours). A newer version is announced once.
+  // Look for a new version right after start-up (the window shows the notice once the intro is
+  // over), then every hour (GitHub is asked at most every 6 hours). A newer version is announced once.
+  let checkedOnce = false;
   const autoCheck = async () => {
     if (!UPDATE_REPO || !store.settings.checkForUpdates || !connectivity.isOnline()) return;
+    checkedOnce = true;
     await updater.check();
     if (updater.shouldAnnounce()) {
       send('update:announce', updater.snapshot());
       updater.markAnnounced();
     }
   };
-  setTimeout(() => autoCheck().catch(() => {}), 25000).unref();
+  setTimeout(() => autoCheck().catch(() => {}), 3000).unref();
   setInterval(() => autoCheck().catch(() => {}), 60 * 60 * 1000).unref();
   connectivity.on('change', (state, prev) => {
     send('net:status', netStatus());
     if (state.online && !prev.online) {
+      // Offline at start: look for updates as soon as the internet is there.
+      if (!checkedOnce) autoCheck().catch(() => {});
       // Back online: refresh owned games, Xbox data and missing artwork.
       library.scan('online').catch(() => {});
     }

@@ -280,7 +280,7 @@
     if (!data) { body.appendChild(el('div', { class: 'hub-skel', style: { flex: '1' } })); return node; }
     if (!items.length) {
       body.appendChild(el('div', { class: 'shots-empty' },
-        el('div', {}, DL.icon('camera'), el('p', { class: 'hub-note', text: t('hub.noShotsSteam') }))));
+        el('div', {}, DL.icon('camera'), el('p', { class: 'hub-note', text: t(game.screenshotSource === 'cemu' ? 'hub.noShotsCemu' : 'hub.noShotsSteam') }))));
       return node;
     }
     const n = Math.min(3, items.length);
@@ -354,6 +354,10 @@
     } else if (game.source === 'steam') {
       cards = [achievementsCard(game, data), friendsCard(game, data), screenshotsCard(game, data)];
       host.className = 'hub cols-3';
+    } else if (game.screenshotSource === 'cemu') {
+      // Cemu (Wii U): its screenshots, matched to this game by when it was played.
+      cards = [screenshotsCard(game, data), infoCard(game, data)];
+      host.className = 'hub cols-2';
     } else if (game.source === 'xbox' && !offline) {
       cards = [achievementsCard(game, data), friendsCard(game, data), infoCard(game, data)];
       host.className = 'hub cols-3';

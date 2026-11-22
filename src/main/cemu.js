@@ -129,4 +129,46 @@ function isCemu(emu) {
   return /^cemu[^\\/]*\.exe$/i.test(path.basename(String(emu.exe || '')));
 }
 
-module.exports = { parsePlayStats, readCemuPlaytime, findMlcDirs, dataDirs, dayToMs, isCemu };
+// ---------------------------------------------------------------- screenshots
+
+const SHOT_RE = /^Screenshot_(\d{4})-(\d{2})-(\d{2})_(\d{2})-(\d{2})-(\d{2})(?:_GamePad)?(?:_\d+)?\.png$/i;
+
+/**
+ * Cemu's screenshots (F12): all games share one "screenshots" folder in Cemu's data folder and the
+ * file names only hold the date and time (Screenshot_2026-11-22_17-30-05.png). Newest first.
+ */
+async function cemuScreenshots(exePath, env = process.env) {
+  const out = [];
+  const seen = new Set();
+  for (const dir of dataDirs(exePath, env)) {
+    const shotDir = path.join(dir, 'screenshots');
+    let names;
+    try { names = await fsp.readdir(shotDir); } catch { continue; }
+    for (const name of names) {
+      const m = SHOT_RE.exec(name);
+      if (!m) continue;
+      const file = path.join(shotDir, name);
+      if (seen.has(file.toLowerCase())) continue;
+      seen.add(file.toLowerCase());
+      let time = new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]).getTime();
+      try { const st = await fsp.stat(file); if (!Number.isFinite(time)) time = st.mtimeMs; } catch { continue; }
+      out.push({ path: file, thumbPath: null, time });
+    }
+  }
+  out.sort((a, b) => b.time - a.time);
+  return out.slice(0, 400);
+}
+
+/**
+ * The screenshots taken while this game was played: during one of its recorded sessions (a little
+ * margin for loading and closing). If the game is the only one of this Cemu in the library, all.
+ */
+function matchShots(shots, sessions, { onlyGame = false } = {}) {
+  if (onlyGame) return shots;
+  const list = Array.isArray(sessions) ? sessions : [];
+  if (!list.length) return [];
+  return shots.filter((s) => list.some(([a, b]) => s.time >= a - 10000 && s.time <= b + 60000));
+}
+
+module.exports = {
+  cemuScreenshots, matchShots, parsePlayStats, readCemuPlaytime, findMlcDirs, dataDirs, dayToMs, isCemu };

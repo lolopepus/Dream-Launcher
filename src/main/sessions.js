@@ -311,10 +311,12 @@ class Sessions extends EventEmitter {
     const s = this.sessions.get(id);
     if (!s) return;
     this.sessions.delete(id);
-    if (!discard && s.detectedAt && s.countPlaytime) {
+    if (!discard && s.detectedAt) {
       const end = s.mode === 'poll' ? (s.lastSeen || this.now()) : this.now();
       const minutes = Math.max(0, (end - s.detectedAt) / 60000);
-      if (minutes >= 0.5) this.store.addPlaytime(id, minutes, s.startedAt);
+      if (s.countPlaytime && minutes >= 0.5) this.store.addPlaytime(id, minutes, s.startedAt);
+      // When it was played, also for games that count their own playtime (screenshot matching).
+      if (typeof this.store.addSession === 'function' && end - s.startedAt >= 10000) this.store.addSession(id, s.startedAt, end);
     }
     this.emit('ended', id, { detected: !!s.detectedAt, manual });
     if (!this._polled().length && this.timer) {

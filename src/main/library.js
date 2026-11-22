@@ -389,6 +389,8 @@ class Library extends EventEmitter {
       lastBooted: (tracked && tracked.lastPlayed) || 0,
       firstPlayed: g.firstPlayed || 0,
       xboxTitleId: g.xboxTitleId || '',
+      // Where screenshots of this game come from (shown in the slide-down panel).
+      screenshotSource: g.source === 'steam' ? 'steam' : (g.cemu ? 'cemu' : null),
       xboxAchievements: g.xboxAchievements || null,
       platform: g.platform || '',
       installPath: g.installed ? (g.romPath || g.installDir || '') : '',
