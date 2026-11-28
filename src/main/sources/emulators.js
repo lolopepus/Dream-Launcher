@@ -9,6 +9,7 @@ const fsp = require('fs').promises;
 const { splitArgs, fillArgs } = require('../util/args');
 const { isDir, isFile } = require('../util/fsx');
 const { readCemuPlaytime, isCemu } = require('../cemu');
+const { emulatorKind, gameInfo } = require('../emushots');
 
 const MAX_DEPTH = 4;
 const MAX_FILES = 5000;
@@ -51,7 +52,7 @@ function shortHash(s) {
   return crypto.createHash('sha1').update(s).digest('hex').slice(0, 12);
 }
 
-async function walk(dir, exts, depth, out) {
+async function walk(dir, exts, depth, out, accept) {
   if (out.length >= MAX_FILES) return;
   let entries;
   try { entries = await fsp.readdir(dir, { withFileTypes: true }); } catch { return; }
@@ -61,12 +62,13 @@ async function walk(dir, exts, depth, out) {
     if (out.length >= MAX_FILES) return;
     const full = path.join(dir, e.name);
     if (e.isDirectory()) {
-      if (depth < MAX_DEPTH && !e.name.startsWith('.')) await walk(full, exts, depth + 1, out);
+      if (depth < MAX_DEPTH && !e.name.startsWith('.')) await walk(full, exts, depth + 1, out, accept);
       continue;
     }
     if (!e.isFile()) continue;
     const ext = path.extname(e.name).slice(1).toLowerCase();
     if (!exts.has(ext)) continue;
+    if (accept && !accept(e.name)) continue;
     // A .bin next to a .cue is a track of that disc, not a separate game.
     if (ext === 'bin' && hasCue) continue;
     // Skip multi-disc members when a .m3u playlist exists in the same folder.
@@ -82,18 +84,33 @@ async function scanEmulator(emu, env = process.env) {
   if (!(await isDir(emu.romDir))) return { emulator: emu, games, error: 'folderMissing' };
   const exts = new Set((emu.extensions || []).map((e) => String(e).toLowerCase()));
   if (!exts.size) return { emulator: emu, games, error: 'noExtensions' };
+  const kind = emulatorKind(emu);
   const files = [];
-  await walk(emu.romDir, exts, 0, files);
+  // RPCS3: a PS3 game's other .bin files are game data, only EBOOT.BIN starts the game.
+  await walk(emu.romDir, exts, 0, files, kind === 'rpcs3' ? (n) => n.toLowerCase() === 'eboot.bin' : null);
   const template = splitArgs(emu.args || '"{rom}"');
   const hasRom = template.some((a) => a.includes('{rom}'));
   for (const file of files) {
     let name = cleanRomName(path.basename(file));
     let titleId = '';
+    let discId = '';
     if (/\.rpx$/i.test(file)) {
       const info = await wiiuInfo(file);
       if (info.skip) continue;
       name = info.name;
       titleId = info.titleId;
+    }
+    if (kind === 'dolphin' || kind === 'ppsspp' || kind === 'rpcs3') {
+      // The game's ID (matches its screenshots) and, for EBOOT files, its real title.
+      const info = await gameInfo(kind, file);
+      if (kind === 'rpcs3') {
+        // Updates and game data ("GD") aren't games; without PARAM.SFO it isn't a game folder.
+        if (!info || !info.title || info.category === 'GD') continue;
+        name = info.title;
+      } else if (info && info.title && /^eboot\.pbp$/i.test(path.basename(file))) {
+        name = info.title;
+      }
+      discId = (info && info.id) || '';
     }
     const rel = path.relative(emu.romDir, file);
     let args = fillArgs(template, { rom: file });
@@ -115,6 +132,8 @@ async function scanEmulator(emu, env = process.env) {
       emulatorId: emu.id,
       emulatorName: emu.name || '',
       titleId,
+      discId,
+      emuKind: kind,
       launch: { type: 'exe', path: emu.exe, args, cwd: path.dirname(emu.exe), trackChild: true },
       client: null,
       tracksOwnPlaytime: false,

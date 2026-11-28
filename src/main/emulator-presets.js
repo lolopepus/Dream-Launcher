@@ -31,6 +31,13 @@ const PRESETS = [
     extensions: ['iso', 'cso', 'chd', 'pbp', 'elf', 'prx'],
   },
   {
+    // Games are folders with PS3_GAME\USRDIR\EBOOT.BIN (discs) or dev_hdd0\game\<ID>\USRDIR\EBOOT.BIN
+    // (PSN). Only EBOOT.BIN files are picked up; the title comes from the game's PARAM.SFO.
+    id: 'rpcs3', name: 'RPCS3', platform: 'PlayStation 3',
+    args: '--no-gui --fullscreen "{rom}"',
+    extensions: ['bin'],
+  },
+  {
     id: 'cemu', name: 'Cemu', platform: 'Wii U',
     args: '-f -g "{rom}"',
     extensions: ['wua', 'wud', 'wux', 'rpx'],

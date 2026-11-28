@@ -20,6 +20,8 @@ const DEFAULT_SETTINGS = Object.freeze({
   onlineMode: 'auto',
   // Look for a newer version on GitHub (at most every 6 hours, only while online).
   checkForUpdates: true,
+  // Show "Dream Launcher" (and the game being played) on your Discord profile.
+  discordStatus: true,
   // Home & display
   uiSize: 'auto',
   showClock: true,
@@ -35,6 +37,8 @@ const DEFAULT_SETTINGS = Object.freeze({
   showStoreBadges: true,
   showSubscriptionBadges: true,
   homeOrder: 'recent',
+  // Colour theme: "game" follows the selected game's cover; the others are fixed (see theme.js).
+  theme: 'game',
   reduceMotion: false,
   // Sound & music
   uiSounds: true,
@@ -74,6 +78,7 @@ const ENUMS = {
   uiSize: ['auto', 'normal', 'large', 'xlarge'],
   clockFormat: ['auto', '24h', '12h'],
   homeOrder: ['recent', 'mostPlayed', 'favorites', 'alphabetical'],
+  theme: ['game', 'darkblue', 'black', 'oled', 'graphite', 'purple', 'blue', 'cyan', 'green', 'yellow', 'orange', 'red', 'pink'],
   music: ['off', 'builtin', 'custom'],
   musicSpeed: ['normal', 'slowed', 'slower'],
   buttonGlyphs: ['auto', 'xbox', 'playstation', 'nintendo'],
@@ -82,8 +87,8 @@ const ENUMS = {
 
 /** Settings shown on each Options tab (for "Reset this tab"). The chosen music file is kept. */
 const SECTION_KEYS = Object.freeze({
-  general: ['language', 'startWithWindows', 'startFullscreen', 'playIntro', 'minimizeOnLaunch', 'restoreAfterPlaying', 'confirmExit', 'onlineMode', 'checkForUpdates'],
-  display: ['uiSize', 'showClock', 'clockFormat', 'showDate', 'showBattery', 'showGameInfo', 'onlyKnownPlaytime', 'showLogos', 'showHeroArt', 'showStoreBadges', 'showSubscriptionBadges', 'homeOrder', 'reduceMotion'],
+  general: ['language', 'startWithWindows', 'startFullscreen', 'playIntro', 'minimizeOnLaunch', 'restoreAfterPlaying', 'confirmExit', 'onlineMode', 'checkForUpdates', 'discordStatus'],
+  display: ['uiSize', 'showClock', 'clockFormat', 'showDate', 'showBattery', 'showGameInfo', 'onlyKnownPlaytime', 'showLogos', 'showHeroArt', 'showStoreBadges', 'showSubscriptionBadges', 'homeOrder', 'theme', 'reduceMotion'],
   sound: ['uiSounds', 'soundVolume', 'music', 'musicSpeed', 'musicVolume', 'pauseMusicWhilePlaying'],
   controllers: ['buttonGlyphs', 'confirmButton', 'vibration', 'showControllerToast'],
   library: ['sources', 'showUninstalledSteam', 'showUninstalledXbox', 'showHiddenGames', 'launchGogViaGalaxy'],

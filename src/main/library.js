@@ -349,7 +349,7 @@ class Library extends EventEmitter {
       case 'epic': return 'Epic Games';
       case 'gog': return 'GOG';
       case 'ubisoft': return 'Ubisoft Connect';
-      case 'xbox': return 'Xbox';
+      case 'xbox': return 'XBOX';
       case 'emulators': return g.emulatorName || 'Emulator';
       case 'manual': return 'PC';
       default: return g.source;
@@ -390,7 +390,7 @@ class Library extends EventEmitter {
       firstPlayed: g.firstPlayed || 0,
       xboxTitleId: g.xboxTitleId || '',
       // Where screenshots of this game come from (shown in the slide-down panel).
-      screenshotSource: g.source === 'steam' ? 'steam' : (g.cemu ? 'cemu' : null),
+      screenshotSource: g.source === 'steam' ? 'steam' : (g.emuKind || null),
       xboxAchievements: g.xboxAchievements || null,
       platform: g.platform || '',
       installPath: g.installed ? (g.romPath || g.installDir || '') : '',

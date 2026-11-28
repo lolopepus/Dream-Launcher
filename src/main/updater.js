@@ -90,6 +90,7 @@ class Updater extends EventEmitter {
     };
     if (this.state.latest) this.state.status = 'available';
     this.file = null;
+    this.fileVersion = null;
     this.busy = null;
   }
 
@@ -127,7 +128,9 @@ class Updater extends EventEmitter {
   }
 
   async _check() {
+    // A download in progress or finished is kept, unless an even newer version came out meanwhile.
     const keep = ['downloading', 'ready'].includes(this.state.status) ? this.state.status : null;
+    const keptVersion = this.fileVersion || (this.state.latest && this.state.latest.version);
     if (!keep) this._set({ status: 'checking', error: null });
     try {
       const res = await this.fetch(`${API}/repos/${this.repo}/releases/latest`, {
@@ -143,7 +146,14 @@ class Updater extends EventEmitter {
       }
       const newer = latest && compareVersions(latest.version, this.current) > 0 ? latest : null;
       this.state.checkedAt = this.now();
-      this._set({ latest: newer, status: keep || (newer ? 'available' : 'upToDate'), error: null });
+      if (keep === 'ready' && newer && newer.version !== keptVersion) {
+        // The downloaded installer is for an older version than the one now out: forget it.
+        this.file = null;
+        this.fileVersion = null;
+        this._set({ latest: newer, status: 'available', progress: null, error: null });
+      } else {
+        this._set({ latest: newer, status: keep || (newer ? 'available' : 'upToDate'), error: null });
+      }
       this._save();
     } catch (err) {
       const offline = !!(err && err.offline);
@@ -198,6 +208,7 @@ class Updater extends EventEmitter {
       await fsp.rm(dest, { force: true });
       await fsp.rename(part, dest);
       this.file = dest;
+      this.fileVersion = latest.version;
       this._set({ status: 'ready', progress: { received, total: asset.size } });
       return { ok: true, verified: !!asset.sha256 };
     } catch (err) {

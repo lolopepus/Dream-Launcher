@@ -4,7 +4,7 @@
  * Creates the window, serves the interface over the app:// scheme, serves cached artwork and
  * media over dl://, and answers all requests from the interface (see preload.js).
  */
-const { app, BrowserWindow, ipcMain, protocol, shell, dialog, net, Menu, nativeImage } = require('electron');
+const { app, BrowserWindow, ipcMain, protocol, shell, dialog, net, Menu, nativeImage, clipboard } = require('electron');
 const path = require('path');
 const crypto = require('crypto');
 const fsp = require('fs').promises;
@@ -30,8 +30,9 @@ const { runProbe, listProcesses, listProcessNames, detectDevice } = require('./u
 const { classifyDevice } = require('./device');
 const { steamScreenshots } = require('./screenshots');
 const { listClips, clipManifest } = require('./clips');
-const { cemuScreenshots, matchShots } = require('./cemu');
+const { emulatorShots, shotsForGame } = require('./emushots');
 const { Thumbs } = require('./thumbs');
+const { DiscordPresence, buildActivity } = require('./discord');
 const { PRESETS } = require('./emulator-presets');
 const { sanitizeSettings, sanitizeOverrides, SECRET_KEYS, sectionDefaults } = require('./defaults');
 const { readJson, writeJsonAtomic } = require('./util/fsx');
@@ -83,6 +84,19 @@ let connectivity;
 let updater;
 let sessions;
 let quitting = false;
+let discord = null; // Discord status (discord.js)
+const startedAt = Date.now();
+let playing = null; // { id, since } of the game started through the launcher
+
+/** Shows the current state on Discord (or nothing, when turned off). */
+function updateDiscord() {
+  if (!discord || !store) return;
+  const s = store.settings;
+  if (!s.discordStatus) { discord.stop(); return; }
+  discord.start();
+  const lang = s.language && s.language !== 'auto' ? s.language : String(app.getLocale() || 'en').slice(0, 2);
+  discord.set(buildActivity({ enabled: true, lang, playing: !!playing, since: startedAt, repo: UPDATE_REPO }));
+}
 
 const log = {
   info: (...a) => console.log(...a),
@@ -212,20 +226,24 @@ async function serveShot(token, params) {
   return serveFile(path.dirname(info.path), path.basename(info.path));
 }
 
-/** Cemu screenshots of this game, matched by the times it was played (see cemu.js). */
-async function cemuShotsFor(g) {
+/**
+ * Screenshots of an emulator game (Cemu, Dolphin, PPSSPP, RPCS3): matched by the game's ID or by
+ * the times it was played (see emushots.js).
+ */
+async function emuShotsFor(g) {
   const exe = g.launch && g.launch.path;
-  if (!exe) return [];
-  const all = await cemuScreenshots(exe, process.env);
+  if (!exe || !g.emuKind) return [];
+  const env = { ...process.env, DOCUMENTS: app.getPath('documents') };
+  const all = await emulatorShots(g.emuKind, exe, env);
   if (!all.length) return [];
-  const siblings = library.raw.filter((x) => x.cemu && x.emulatorId === g.emulatorId && !store.getOverride(x.id).hidden);
+  const siblings = library.raw.filter((x) => x.emuKind === g.emuKind && x.emulatorId === g.emulatorId && !store.getOverride(x.id).hidden);
   const tracked = store.playtime[g.id];
-  return matchShots(all, tracked && tracked.sessions, { onlyGame: siblings.length === 1 });
+  return shotsForGame(g.emuKind, g, all, { siblings, sessions: tracked && tracked.sessions }).slice(0, 400);
 }
 
 async function screenshotsFor(g) {
   let list;
-  if (g.cemu) list = await cemuShotsFor(g);
+  if (g.emuKind) list = await emuShotsFor(g);
   else {
     const meta = library.steamMeta;
     list = await steamScreenshots(meta && meta.steamPath, meta && meta.user && meta.user.accountId, g.sourceId);
@@ -347,6 +365,7 @@ function applySettingsSideEffects(prev, next) {
   }
   if (changed('startFullscreen') && win && !win.isDestroyed()) win.setFullScreen(!!next.startFullscreen);
   if (changed('onlineMode')) connectivity.modeChanged().catch(() => {});
+  if (changed('discordStatus') || changed('language')) updateDiscord();
   if (RESCAN_KEYS.some(changed)) {
     if (changed('steamApiKey') || changed('steamId')) store.steamWeb = {};
     if (changed('xblApiKey')) xbox.reset();
@@ -531,7 +550,7 @@ function registerIpc() {
     const g = gameOrError(id);
     const online = connectivity.isOnline();
     if (g.source === 'xbox') return xboxHub(g, lang, online);
-    if (g.cemu) return { steam: false, cemu: true, screenshots: await screenshotsFor(g).catch(() => []) };
+    if (g.emuKind) return { steam: false, emulator: g.emuKind, screenshots: await screenshotsFor(g).catch(() => []) };
     if (g.source !== 'steam') return { steam: false };
     // Screenshots are read from the Steam folder: they work without a Web API key.
     if (!library.steamMeta && library.scanning) await Promise.race([library.scanning.catch(() => {}), new Promise((r) => setTimeout(r, 20000))]);
@@ -752,6 +771,8 @@ function registerIpc() {
     return res;
   });
 
+  // Text in the clipboard, read only when the user presses "Paste key" (API keys window).
+  handle('app:clipboardText', async () => ({ text: String(clipboard.readText() || '').trim().slice(0, 300) }));
   handle('app:openDataFolder', async () => {
     const err = await shell.openPath(app.getPath('userData'));
     return err ? { error: 'failed' } : { ok: true };
@@ -830,6 +851,7 @@ function maybeRescan() {
 
 function wireEvents() {
   library.on('updated', () => send('library:updated', snapshot()));
+  library.on('updated', () => updateDiscord());
   let scannedOnce = false;
   library.on('updated', () => {
     if (scannedOnce || !library.lastScanAt) return;
@@ -846,8 +868,11 @@ function wireEvents() {
   let checkedOnce = false;
   const autoCheck = async () => {
     if (!UPDATE_REPO || !store.settings.checkForUpdates || !connectivity.isOnline()) return;
+    // The first check after start always asks GitHub (not the saved answer), so a version that
+    // came out since the last check is offered right away instead of an older one.
+    const force = !checkedOnce;
     checkedOnce = true;
-    await updater.check();
+    await updater.check({ force });
     if (updater.shouldAnnounce()) {
       send('update:announce', updater.snapshot());
       updater.markAnnounced();
@@ -866,6 +891,8 @@ function wireEvents() {
   });
   sessions.on('started', (id) => {
     library.setRunning(id, true);
+    playing = { id, since: Date.now() };
+    updateDiscord();
     send('game:started', id);
     if (store.settings.minimizeOnLaunch && win && !win.isDestroyed()) {
       setTimeout(() => { if (win && !win.isDestroyed() && sessions.isRunning(id)) win.minimize(); }, 1200);
@@ -873,6 +900,7 @@ function wireEvents() {
   });
   sessions.on('ended', (id, info) => {
     library.setRunning(id, false);
+    if (playing && playing.id === id) { playing = null; updateDiscord(); }
     send('game:ended', id);
     // Cemu writes its play log when the game closes; the Xbox network updates a bit later.
     const g = library.get(id);
@@ -929,6 +957,7 @@ if (!app.requestSingleInstanceLock()) {
     xbox = new XboxLive({ store, fetch: fetchFn, log });
     library = new Library({ store, probe: runProbe, artwork, steamWeb, xbox, isOnline, log });
     updater = new Updater({ repo: UPDATE_REPO, currentVersion: app.getVersion(), fetch: fetchFn, store, tempDir: app.getPath('temp'), log });
+    discord = new DiscordPresence({ log });
     sessions = new Sessions({
       openExternal: (url) => shell.openExternal(url),
       openPath: (p) => shell.openPath(p),
@@ -966,6 +995,7 @@ if (!app.requestSingleInstanceLock()) {
     startTimers();
     setTimeout(() => { if (thumbs) thumbs.prune().catch(() => {}); }, 60000).unref();
     connectivity.start();
+    updateDiscord();
     // Know online/offline before the first scan (at most a few seconds), so nothing that needs
     // the internet is attempted, and remembered as failed, while there is none.
     Promise.race([connectivity.check(), new Promise((r) => setTimeout(r, 3000))])
@@ -980,6 +1010,7 @@ if (!app.requestSingleInstanceLock()) {
     e.preventDefault();
     quitting = true;
     if (sessions) sessions.stopAll();
+    if (discord) discord.stop();
     store.flush().finally(() => app.exit(0));
   });
 }

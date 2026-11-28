@@ -65,6 +65,7 @@ function makeFakeElectron(userData) {
     },
     net: { fetch: async () => ({ ok: false, status: 404, headers: { get: () => null }, json: async () => null, arrayBuffer: async () => new ArrayBuffer(0) }) },
     Menu: { setApplicationMenu() {} },
+    clipboard: { readText: () => '  ABCDEF0123456789ABCDEF0123456789  ' },
   };
   return {
     electron, handlers, protocols, sent, opened,
@@ -228,6 +229,8 @@ test('main process boots and answers IPC + protocol requests', async () => {
   assert.equal((await call('shot:showInFolder', 'nope')).error, 'notFound');
   assert.equal((await fake.protocols.dl({ url: 'dl://shot/abcdef' })).status, 404);
   assert.equal((await fake.protocols.dl({ url: 'dl://shot/abcdef?thumb=1&w=640' })).status, 404);
+  // Pasting a key reads the clipboard (trimmed).
+  assert.deepEqual(await call('app:clipboardText'), { text: 'ABCDEF0123456789ABCDEF0123456789' });
   // Clips: unknown clips and paths outside a clip are refused.
   assert.equal((await call('clip:manifest', 'nope')).error, 'notFound');
   assert.equal((await call('clip:showInFolder', 'nope')).error, 'notFound');

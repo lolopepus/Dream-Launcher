@@ -118,6 +118,8 @@
 .menu-ic { width: 26px; height: 26px; flex: none; }
 .menu-label { flex: 1; }
 .menu-value { font-size: 17px; color: var(--dim); }
+.menu-external { display: grid; place-items: center; }
+.menu-external svg { width: 18px; height: 18px; }
 .menu-item.danger { color: #ff6961; }
 .menu-item.is-focused { background: #fff; color: #0b0d1a; }
 .menu-item.is-focused .menu-value { color: rgba(11, 13, 26, 0.6); }
@@ -402,19 +404,32 @@
 .ach-gs-pill { font-size: 13px; font-weight: 700; padding: 3px 9px; border-radius: 10px; background: rgba(255, 255, 255, 0.1); }
 .ach-row.is-focused .ach-gs-pill { background: rgba(11, 13, 26, 0.1); }
 
-/* ------------------------------------------------------------------ API keys explanation */
-.sheet.dialog.keys-tip { width: 980px; margin-left: -490px; }
-.keys-cards { display: flex; flex-direction: column; gap: 12px; margin: 4px 0 14px; }
-.keys-card { display: flex; gap: 18px; align-items: flex-start; padding: 18px 20px; border-radius: 22px; background: rgba(255, 255, 255, 0.07); }
-.keys-ic { flex: none; width: 48px; height: 48px; border-radius: 15px; display: grid; place-items: center; background: rgba(255, 255, 255, 0.1); }
+/* ------------------------------------------------------------------ API keys window (keystip.js) */
+.sheet.keys-tip { top: 64px; bottom: 64px; }
+.keys-tip .sheet-body { overflow-y: auto; }
+.keys-intro { margin: 0 0 18px; max-width: 1100px; }
+.keys-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; align-items: stretch; }
+.keys-card { display: flex; flex-direction: column; gap: 12px; padding: 22px 22px 20px; border-radius: 26px; background: rgba(255, 255, 255, 0.07); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06); }
+.keys-card.is-set { background: rgba(52, 199, 89, 0.09); box-shadow: inset 0 0 0 1px rgba(52, 199, 89, 0.3); }
+.keys-card-head { display: flex; gap: 14px; align-items: center; }
+.keys-ic { flex: none; width: 50px; height: 50px; border-radius: 16px; display: grid; place-items: center; background: rgba(255, 255, 255, 0.1); }
 .keys-ic svg { width: 26px; height: 26px; }
 .keys-card.is-set .keys-ic { background: rgba(52, 199, 89, 0.22); color: #7ee29b; }
-.keys-text { min-width: 0; flex: 1; }
-.keys-title { display: flex; align-items: center; gap: 12px; font-size: 20px; }
-.keys-text p { margin: 5px 0 0; font-size: 16px; line-height: 1.45; color: rgba(255, 255, 255, 0.72); }
-.keys-pill { font-size: 13px; font-weight: 700; padding: 3px 10px; border-radius: 999px; background: rgba(255, 255, 255, 0.12); color: rgba(255, 255, 255, 0.75); }
+.keys-titles { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-width: 0; }
+.keys-titles b { font-size: 20px; }
+.keys-pill { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 700; padding: 3px 10px; border-radius: 999px; background: rgba(255, 255, 255, 0.12); color: rgba(255, 255, 255, 0.75); }
+.keys-pill svg { width: 14px; height: 14px; }
 .keys-pill.set { background: rgba(52, 199, 89, 0.25); color: #9cf0b3; }
-.keys-note { margin: 0 0 10px; font-size: 15px; color: rgba(255, 255, 255, 0.6); line-height: 1.45; }
+.keys-what { font-size: 16px; line-height: 1.45; color: rgba(255, 255, 255, 0.78); min-height: 46px; }
+.keys-steps { flex: 1; margin: 0; padding: 12px 14px 12px 34px; border-radius: 16px; background: rgba(0, 0, 0, 0.18); font-size: 15px; line-height: 1.45; color: rgba(255, 255, 255, 0.72); display: flex; flex-direction: column; gap: 6px; }
+.keys-steps li::marker { color: rgba(255, 255, 255, 0.45); font-weight: 700; }
+.keys-actions { display: flex; flex-direction: column; gap: 10px; }
+.keys-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-width: 0; padding-left: 12px; padding-right: 12px; }
+.keys-btn svg { flex: none; width: 18px; height: 18px; }
+.keys-btn span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.keys-foot { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-top: 18px; }
+.keys-note { flex: 1; margin: 0; font-size: 15px; color: rgba(255, 255, 255, 0.6); line-height: 1.45; }
+.keys-foot .dialog-buttons { margin: 0; flex: none; }
 
 /* ------------------------------------------------------------------ debug menu (type "debug" in the search) */
 .debug-head { grid-column: 1 / -1; font-size: 15px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(255, 255, 255, 0.55); }
@@ -429,3 +444,68 @@
 .debug-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .debug-text b { font-size: 18px; }
 .debug-text span { font-size: 14px; color: rgba(255, 255, 255, 0.65); line-height: 1.35; }
+
+/* ------------------------------------------------------------------ colour themes (theme.js) */
+/* While picking, the other windows step aside so the whole launcher shows the theme. */
+body.theme-preview .overlay:not([data-overlay="theme"]) { opacity: 0; pointer-events: none; transition: opacity 0.25s ease; }
+.overlay[data-overlay="theme"] .backdrop { background: transparent; -webkit-backdrop-filter: none; backdrop-filter: none; }
+.theme-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 6px 6px 16px; margin: 0 -6px; }
+.theme-groups { display: flex; flex-direction: column; gap: 22px; }
+.theme-group-title { font-size: 15px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(255, 255, 255, 0.55); margin: 0 0 10px 4px; }
+.theme-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+.theme-swatch {
+  position: relative; display: flex; flex-direction: column; gap: 9px; padding: 8px; border-radius: 22px;
+  background: rgba(255, 255, 255, 0.06); transition: transform 0.16s var(--ease), background 0.16s ease, box-shadow 0.16s ease;
+}
+.theme-swatch:hover { background: rgba(255, 255, 255, 0.11); }
+.theme-swatch.is-focused { background: rgba(255, 255, 255, 0.14); box-shadow: 0 0 0 4px #fff; transform: scale(1.04); z-index: 1; }
+.theme-mini { position: relative; display: block; width: 100%; aspect-ratio: 16 / 9; border-radius: 15px; overflow: hidden; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1); }
+.theme-waves, .theme-waves svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.theme-mini.is-game::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(10, 12, 30, 0.15), rgba(10, 12, 30, 0.55)); }
+.theme-game-mark { position: absolute; left: 50%; top: 50%; z-index: 1; width: 44px; height: 44px; margin: -22px 0 0 -22px; border-radius: 14px; display: grid; place-items: center; background: rgba(0, 0, 0, 0.35); }
+.theme-game-mark svg { width: 24px; height: 24px; }
+.theme-name { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 0 6px 2px; font-size: 16px; font-weight: 600; }
+.theme-name svg { flex: none; width: 18px; height: 18px; color: var(--good); }
+.theme-desc { padding: 0 6px 4px; font-size: 14px; line-height: 1.4; color: rgba(255, 255, 255, 0.62); }
+/* "Game colour" gets a wide row: picture on the left, text on the right. */
+.group-special .theme-grid { grid-template-columns: 1fr; }
+.group-special .theme-swatch { display: grid; grid-template-columns: 210px 1fr; grid-template-rows: auto 1fr; column-gap: 18px; row-gap: 4px; align-items: start; }
+.group-special .theme-mini { grid-row: 1 / span 2; }
+.group-special .theme-name { padding-top: 14px; font-size: 18px; justify-content: flex-start; }
+.group-special .theme-swatch.is-focused { transform: scale(1.015); }
+.theme-dot { width: 22px; height: 22px; border-radius: 50%; box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.35); margin-right: 4px; }
+.theme-dot.is-game { background: conic-gradient(#ff6b8b, #ffb347, #ffe66d, #5ee08a, #4cc9ff, #8b7bff, #ff6b8b); }
+
+/* ------------------------------------------------------------------ tour (tour.js) */
+.tour { position: absolute; inset: 0; z-index: 30; opacity: 0; transition: opacity 0.3s ease; }
+.tour.show { opacity: 1; }
+.tour.handoff { opacity: 0; pointer-events: none; }
+.tour-hole {
+  position: absolute; left: 50%; top: 50%; width: 0; height: 0; border-radius: 30px; pointer-events: none;
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.9), 0 0 0 4000px rgba(3, 4, 12, 0.7);
+  transition: left 0.45s var(--ease), top 0.45s var(--ease), width 0.45s var(--ease), height 0.45s var(--ease), opacity 0.3s ease;
+}
+.tour:not(.has-hole) .tour-hole { opacity: 0; }
+/* Steps without a light dim the screen a little (the colour step doesn't: the colours must show). */
+.tour:not(.has-hole):not([data-place="side"]) { background: rgba(3, 4, 12, 0.6); }
+.tour-card {
+  position: absolute; left: 50%; top: 50%; width: 640px; padding: 30px 32px 26px; border-radius: 30px;
+  background: var(--panel); -webkit-backdrop-filter: blur(40px) saturate(1.6); backdrop-filter: blur(40px) saturate(1.6);
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.55);
+  transition: left 0.45s var(--ease), top 0.45s var(--ease);
+}
+.tour:not(.has-hole):not([data-place="side"]) .tour-card { transform: translate(-50%, -50%); }
+.tour[data-place="side"] .tour-card { left: auto; top: 56px; right: 56px; bottom: 56px; width: 760px; display: flex; flex-direction: column; }
+.tour-stepno { font-size: 14px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(255, 255, 255, 0.55); }
+.tour-title { margin: 8px 0 10px; font-size: 32px; font-weight: 800; letter-spacing: -0.01em; }
+.tour-text { font-size: 18px; line-height: 1.5; color: rgba(255, 255, 255, 0.8); }
+.tour-extra:empty { display: none; }
+.tour[data-place="side"] .tour-extra { flex: 1; min-height: 0; overflow-y: auto; margin: 16px -8px 0; padding: 8px; }
+.tour-buttons { display: flex; gap: 14px; justify-content: flex-end; margin-top: 24px; }
+.tour-buttons .btn[hidden] { display: none; }
+
+/* Debug menu: two columns. */
+.sheet.debug-sheet .sheet-body { display: flex; min-height: 0; }
+.debug-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; flex: 1; min-height: 0; }
+.debug-cols .info-row .action-value { max-width: 62%; text-align: right; white-space: normal; font-size: 18px; }
+.debug-info { display: flex; flex-direction: column; gap: 8px; }

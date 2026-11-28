@@ -121,6 +121,7 @@
   /** New status from the main process. Tells the user when the state changes by itself. */
   function apply(net, { quiet = false } = {}) {
     if (!net || typeof net !== 'object') return;
+    if (DL.debug) net = DL.debug.filterNet(net); // debug menu: "Offline"
     const before = DL.state.net || {};
     DL.state.net = net;
     const changed = before.online !== net.online;

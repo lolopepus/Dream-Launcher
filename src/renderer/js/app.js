@@ -63,6 +63,7 @@
     });
     DL.api.on('game:ended', () => {
       DL.state.gameRunning = false;
+      if (DL.debug) DL.debug.fakes.gameRunning = false;
       DL.waves.refresh();
       DL.music.resume('game');
       DL.actions.hideLaunching();
@@ -85,7 +86,7 @@
     loadFriends();
     DL.app = { ...(DL.app || {}), loadFriends };
     DL.api.on('net:status', (net) => DL.net.apply(net));
-    DL.api.on('update:status', (u) => { DL.state.update = u; DL.bus.emit('update', u); });
+    DL.api.on('update:status', (u) => { u = DL.debug ? DL.debug.filterUpdate(u) : u; DL.state.update = u; DL.bus.emit('update', u); });
     DL.api.on('update:announce', (u) => {
       DL.state.update = u;
       DL.bus.emit('update', u);
@@ -112,6 +113,7 @@
         applyMotionClasses();
         DL.waves.refresh();
       }
+      if (patch.all || 'theme' in patch) DL.theme.apply();
     });
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) DL.music.pause('hidden'); else DL.music.resume('hidden');
@@ -224,6 +226,7 @@
     DL.i18n.set(DL.state.settings.language);
     DL.i18n.apply(document);
     applyMotionClasses();
+    DL.theme.apply();
     DL.waves.refresh();
     DL.sound.applySettings();
     scaleStage();
@@ -237,7 +240,20 @@
     DL.state.ready = true;
     await playIntro(init.library && init.library.games && init.library.games.length > 0);
     DL.music.apply();
-    // Explains the free API keys (Steam, SteamGridDB, Xbox) if a useful one is missing.
+    // First start (or first start of a version with a new tour): the tour, which ends with the
+    // API keys window. Otherwise the API keys window on its own, if a key is missing.
+    if (DL.tour && DL.tour.shouldRun()) {
+      // Wait for the games (a first scan can take a moment) so the tour shows the real row, and
+      // for the home screen to be free (nothing opened meanwhile, no game started).
+      await Promise.race([libraryReady, DL.sleep(8000)]);
+      await DL.sleep(900);
+      const free = () => {
+        const top = DL.nav.top();
+        return top && top.id === 'dashboard' && !(DL.hub && DL.hub.isOpen()) && !DL.state.gameRunning;
+      };
+      while (!free()) await DL.sleep(1500);
+      DL.tour.start();
+    }
     if (DL.keysTip) DL.keysTip.maybeShow();
   }
 

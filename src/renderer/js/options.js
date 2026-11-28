@@ -22,6 +22,25 @@
 
   const S = () => DL.state.settings;
   const set = (patch) => DL.saveSettings(patch);
+
+  /** Colour theme: a row with a small colour dot; opens the visual picker. */
+  function themeRow() {
+    const id = () => S().theme || 'game';
+    const row = ui.actionRow({
+      label: t('theme.title'), desc: t('theme.rowDesc'), value: DL.theme.nameOf(id()), icon: 'chevron',
+      onClick: () => DL.theme.openPicker({ onDone: () => { row._dlSetValue(DL.theme.nameOf(id())); paintDot(); } }),
+    });
+    const dot = el('span', { class: 'theme-dot' });
+    const paintDot = () => {
+      const th = DL.theme.resolve(id());
+      dot.classList.toggle('is-game', id() === 'game');
+      dot.style.background = id() === 'game' ? '' : `linear-gradient(135deg, rgb(${th.accent.join(', ')}), ${th.bg2})`;
+    };
+    paintDot();
+    const control = row.querySelector('.action-control');
+    if (control) control.insertBefore(dot, control.firstChild);
+    return row;
+  }
   const t = (k, p) => DL.t(k, p);
 
   function sourceDesc(id) {
@@ -51,6 +70,7 @@
         ui.toggleRow({ label: t('options.confirmExit'), get: () => S().confirmExit, set: (v) => set({ confirmExit: v }) }),
         ui.toggleRow({ label: t('net.offlineMode'), desc: t('net.offlineModeDesc'), get: () => S().onlineMode === 'offline', set: (v) => set({ onlineMode: v ? 'offline' : 'auto' }) }),
         ui.toggleRow({ label: t('update.auto'), desc: t('update.autoDesc'), get: () => S().checkForUpdates, set: (v) => set({ checkForUpdates: v }) }),
+        ui.toggleRow({ label: t('options.discordStatus'), desc: t('options.discordStatusDesc'), get: () => S().discordStatus, set: (v) => set({ discordStatus: v }) }),
         ui.actionRow({ label: t('options.quit'), icon: 'quit', danger: true, onClick: () => DL.api.quit() }),
       ];
     },
@@ -84,6 +104,7 @@
         ui.toggleRow({ label: t('options.showGameInfo'), desc: t('options.showGameInfoDesc'), get: () => S().showGameInfo, set: (v) => set({ showGameInfo: v }) }),
         ui.toggleRow({ label: t('options.onlyKnownPlaytime'), desc: t('options.onlyKnownPlaytimeDesc'), get: () => S().onlyKnownPlaytime, set: (v) => set({ onlyKnownPlaytime: v }) }),
         ui.toggleRow({ label: t('options.showLogos'), desc: t('options.showLogosDesc'), get: () => S().showLogos, set: (v) => set({ showLogos: v }) }),
+        themeRow(),
         ui.toggleRow({ label: t('options.showHeroArt'), get: () => S().showHeroArt, set: (v) => set({ showHeroArt: v }) }),
         ui.toggleRow({ label: t('options.showStoreBadges'), desc: t('options.showStoreBadgesDesc'), get: () => S().showStoreBadges, set: (v) => set({ showStoreBadges: v }) }),
         ui.toggleRow({ label: t('options.showSubscriptionBadges'), get: () => S().showSubscriptionBadges, set: (v) => set({ showSubscriptionBadges: v }) }),
@@ -139,7 +160,7 @@
       const rows = [
         ui.choiceRow({
           label: t('options.buttonGlyphs'),
-          options: [{ value: 'auto', label: t('options.glyphsAuto') }, { value: 'xbox', label: 'Xbox' }, { value: 'playstation', label: 'PlayStation' }, { value: 'nintendo', label: 'Nintendo' }],
+          options: [{ value: 'auto', label: t('options.glyphsAuto') }, { value: 'xbox', label: 'XBOX' }, { value: 'playstation', label: 'PlayStation' }, { value: 'nintendo', label: 'Nintendo' }],
           get: () => S().buttonGlyphs, set: (v) => set({ buttonGlyphs: v }),
         }),
         ui.choiceRow({
@@ -176,7 +197,7 @@
       return rows;
     },
     accounts() {
-      const sec = () => S().secrets || {};
+      const sec = () => (DL.debug && DL.debug.fakes.noKeys ? {} : S().secrets || {});
       return [
         ui.actionRow({ label: t('keysTip.whatFor'), desc: t('keysTip.whatForDesc'), icon: 'info', onClick: () => DL.keysTip.open() }),
         ui.sectionTitle('Steam'),
@@ -203,7 +224,7 @@
           set: async (v) => { await set({ sgdbApiKey: v }); DL.toast({ title: t(v ? 'accounts.saved' : 'accounts.removed'), icon: 'check', tone: 'good' }); },
         }),
         ui.actionRow({ label: t('accounts.getSgdbKey'), value: 'steamgriddb.com', onClick: () => DL.api.openExternal('https://www.steamgriddb.com/profile/preferences/api') }),
-        ui.sectionTitle('Xbox'),
+        ui.sectionTitle('XBOX'),
         ui.textRow({
           label: t('accounts.xboxKey'), desc: t('accounts.xboxKeyDesc'),
           get: () => '', display: () => sec().xblApiKey || '', placeholder: t('accounts.notSet'),

@@ -88,3 +88,53 @@ test('artwork: Minecraft for Windows is searched as "Minecraft" on SteamGridDB, 
   store.artIndex['xbox:mc'].searchV = 2;
   assert.equal(art.needsWork('xbox:mc', false, { id: 'xbox:mc', name: 'Minecraft for Windows' }), false);
 });
+
+test('updates: a downloaded installer for an older version is dropped when a newer one is out', async () => {
+  const { Updater } = require('../src/main/updater');
+  const repo = 'lolopepus/Dream-Launcher';
+  let tag = 'v2.3.1';
+  const rel = () => ({
+    tag_name: tag, html_url: `https://github.com/${repo}/releases/tag/${tag}`, published_at: '2026-11-22T15:00:00Z',
+    assets: [{ name: `Dream.Launcher.Setup.${tag.slice(1)}.exe`, size: 2 * 1024 * 1024, browser_download_url: `https://github.com/${repo}/releases/download/${tag}/Setup.exe` }],
+  });
+  const fetch = async () => ({ ok: true, status: 200, json: async () => rel() });
+  const store = { update: {}, save() {} };
+  const u = new Updater({ repo, currentVersion: '2.3.0', fetch, store, tempDir: tmpDir(), log: {} });
+  await u.check({ force: true });
+  assert.equal(u.snapshot().latest.version, '2.3.1');
+  // Pretend 2.3.1 was downloaded.
+  u.file = __filename;
+  u.fileVersion = '2.3.1';
+  u._set({ status: 'ready' });
+  // The saved answer is reused within 6 hours…
+  tag = 'v2.4.0';
+  await u.check();
+  assert.equal(u.snapshot().latest.version, '2.3.1');
+  // …but asking GitHub again finds 2.4.0, and the 2.3.1 installer is not used for it.
+  await u.check({ force: true });
+  assert.equal(u.snapshot().latest.version, '2.4.0');
+  assert.equal(u.snapshot().status, 'available');
+  assert.equal(u.readyFile(), null);
+});
+
+test('texts: every fixed text key used in the window exists in English, German and Polish', () => {
+  const vm = require('vm');
+  const dir = path.join(__dirname, '..', 'src', 'renderer', 'js');
+  const sb = {};
+  sb.window = sb;
+  vm.createContext(sb);
+  for (const l of ['en', 'de', 'pl']) vm.runInContext(fs.readFileSync(path.join(dir, 'locales', `${l}.js`), 'utf8'), sb);
+  const get = (o, k) => k.split('.').reduce((a, p) => (a == null ? a : a[p]), o);
+  const keys = new Set();
+  for (const f of fs.readdirSync(dir).filter((n) => n.endsWith('.js'))) {
+    const src = fs.readFileSync(path.join(dir, f), 'utf8');
+    // DL.t('a.b') / t('a.b') and keys kept in lookup tables like { hero: 'art.background' }.
+    for (const m of src.matchAll(/\bt\(\s*'([a-zA-Z]+\.[a-zA-Z0-9_.]+)'/g)) keys.add(m[1]);
+    for (const m of src.matchAll(/:\s*'((?:art|hub|menu|options|accounts|update|net|keysTip|library|home|hints)\.[a-zA-Z0-9_.]+)'/g)) keys.add(m[1]);
+  }
+  assert.ok(keys.has('art.background'));
+  for (const l of ['en', 'de', 'pl']) {
+    const missing = [...keys].filter((k) => get(sb.DL_LOCALES[l], k) === undefined);
+    assert.deepEqual(missing, [], `${l} is missing texts`);
+  }
+});

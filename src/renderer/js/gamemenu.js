@@ -4,10 +4,29 @@
   const DL = (window.DL = window.DL || {});
   const { el } = DL;
 
-  function menuItem(icon, label, onClick, { danger = false, value = '' } = {}) {
+  function menuItem(icon, label, onClick, { danger = false, value = '', external = false } = {}) {
     return el('button', { class: `menu-item ${danger ? 'danger' : ''}`, nav: true, on: { click: onClick } },
-      DL.icon(icon, 'menu-ic'), el('span', { class: 'menu-label', text: label }), value ? el('span', { class: 'menu-value', text: value }) : null);
+      DL.icon(icon, 'menu-ic'), el('span', { class: 'menu-label', text: label }),
+      value ? el('span', { class: 'menu-value', text: value }) : null,
+      external && !value ? el('span', { class: 'menu-value menu-external' }, DL.icon('external')) : null);
   }
+
+  /**
+   * Web pages about a game: TrueAchievements for XBOX games (its search, as their own page
+   * addresses can't be worked out reliably from the name), the Steam store page for Steam games.
+   */
+  function gameLinks(g) {
+    const links = [];
+    if (g.source === 'xbox' && g.name) {
+      links.push({ icon: 'trophy', label: DL.t('menu.trueAchievements'), url: `https://www.trueachievements.com/searchresults.aspx?search=${encodeURIComponent(g.name)}` });
+    }
+    if (g.source === 'steam' && /^\d+$/.test(String(g.sourceId || ''))) {
+      links.push({ icon: 'store', label: DL.t('menu.steamStore'), url: `https://store.steampowered.com/app/${g.sourceId}/` });
+    }
+    return links;
+  }
+
+  DL.gameLinks = gameLinks;
 
   function openGameMenu(gameArg) {
     const id = gameArg.id;
@@ -30,7 +49,11 @@
       if (g.status === 'running') list.appendChild(menuItem('check', DL.t('actions.notPlaying'), () => { close(); DL.actions.stopTracking(g); }));
       if (g.actions.update) list.appendChild(menuItem('download', DL.t('actions.update'), needsNet(() => { close(); DL.actions.update(g); }), netValue));
       if (g.actions.checkUpdates) list.appendChild(menuItem('refresh', DL.t('actions.checkUpdates'), needsNet(() => { close(); DL.actions.update(g); }), netValue));
-      if (g.actions.openClient) list.appendChild(menuItem('store', DL.t('menu.openClient', { store: g.sourceLabel }), () => { close(); DL.actions.openClient(g); }));
+      // Steam games have the Steam store page link instead of "Open in Steam".
+      if (g.actions.openClient && g.source !== 'steam') list.appendChild(menuItem('store', DL.t('menu.openClient', { store: g.sourceLabel }), () => { close(); DL.actions.openClient(g); }));
+      for (const link of gameLinks(g)) {
+        list.appendChild(menuItem(link.icon, link.label, needsNet(() => { DL.api.openExternal(link.url); }), offline ? netValue : { external: true }));
+      }
       list.appendChild(menuItem('star', DL.t(g.favorite ? 'menu.unfavorite' : 'menu.favorite'), async () => {
         await DL.actions.setFlags(g, { favorite: !g.favorite });
         DL.sound.play('toggle');

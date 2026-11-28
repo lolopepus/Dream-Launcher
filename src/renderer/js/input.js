@@ -127,7 +127,7 @@
       if (p === '2007') return 'Joy-Con (R)';
       return 'Nintendo Controller';
     }
-    if (kind === 'xbox') return 'Xbox Controller';
+    if (kind === 'xbox') return 'XBOX Controller';
     const name = String(id || '').split('(')[0].trim();
     return name || DL.t('controller.generic');
   }

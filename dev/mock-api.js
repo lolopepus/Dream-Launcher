@@ -60,9 +60,10 @@
     ['Cinder Road', 'gog', 1500, now - 200 * DAY],
     ['Tomoyo After ~It\'s a Wonderful Life~ English Edition', 'steam', 300, now - 90 * DAY],
     ['Forza Horizon 5', 'xbox', 1500, now - 50 * DAY, { status: 'notInstalled', known: 'xbox', xboxTitleId: '1551118141', xboxAch: { unlocked: 40, total: 200 } }],
+    ['Petal Quest', 'emulators', 120, now - 4 * DAY, { platform: 'GameCube / Wii', emu: 'Dolphin', shots: 'dolphin' }],
   ];
 
-  const labels = { steam: 'Steam', epic: 'Epic Games', gog: 'GOG', ubisoft: 'Ubisoft Connect', xbox: 'Xbox', emulators: 'PCSX2', manual: 'PC' };
+  const labels = { steam: 'Steam', epic: 'Epic Games', gog: 'GOG', ubisoft: 'Ubisoft Connect', xbox: 'XBOX', emulators: 'PCSX2', manual: 'PC' };
 
   function makeGame([name, source, minutes, last, extra = {}], i) {
     const status = extra.status || 'installed';
@@ -89,7 +90,7 @@
       xboxTitleId: extra.xboxTitleId || '',
       xboxAchievements: extra.xboxAch || null,
       platform: extra.platform || '',
-      screenshotSource: source === 'steam' ? 'steam' : (extra.known === 'cemu' ? 'cemu' : null),
+      screenshotSource: source === 'steam' ? 'steam' : (extra.shots || (extra.known === 'cemu' ? 'cemu' : null)),
       installPath: installed ? `D:\\Games\\${name}` : '',
       favorite: i === 2,
       hidden: false,
@@ -116,7 +117,7 @@
     version: 1, language: window.DL_MOCK_LANG || 'auto', startWithWindows: false, startFullscreen: true, playIntro: true,
     minimizeOnLaunch: true, restoreAfterPlaying: true, confirmExit: true, onlineMode: window.DL_MOCK_OFFLINE === 'forced' ? 'offline' : 'auto', onlyKnownPlaytime: true, uiSize: window.DL_MOCK_UISIZE || 'auto', showClock: true, clockFormat: 'auto',
     showDate: true, showBattery: true, showGameInfo: true, showLogos: true, showHeroArt: true, showStoreBadges: true,
-    showSubscriptionBadges: true, homeOrder: 'recent', reduceMotion: !!window.DL_MOCK_REDUCE, uiSounds: true, soundVolume: 70,
+    showSubscriptionBadges: true, homeOrder: 'recent', theme: window.DL_MOCK_THEME || 'game', reduceMotion: !!window.DL_MOCK_REDUCE, uiSounds: true, soundVolume: 70,
     music: window.DL_MOCK_MUSIC || 'builtin', musicSpeed: 'slowed', musicVolume: 35, customMusicFile: '', customMusicName: '', pauseMusicWhilePlaying: true,
     buttonGlyphs: 'auto', confirmButton: 'auto', vibration: true, showControllerToast: true,
     sources: { steam: true, epic: true, gog: true, ubisoft: true, xbox: true, emulators: true, manual: true },
@@ -167,6 +168,8 @@
         { id: 'retroarch', name: 'RetroArch', platform: 'RetroArch', args: '-f -L "cores\\snes9x_libretro.dll" "{rom}"', extensions: ['zip', 'sfc'] },
         { id: 'dolphin', name: 'Dolphin', platform: 'GameCube / Wii', args: '-b -e "{rom}"', extensions: ['iso', 'rvz'] },
         { id: 'pcsx2', name: 'PCSX2', platform: 'PlayStation 2', args: '-fullscreen -batch -- "{rom}"', extensions: ['iso', 'chd'] },
+        { id: 'ppsspp', name: 'PPSSPP', platform: 'PSP', args: '--fullscreen "{rom}"', extensions: ['iso', 'cso', 'pbp'] },
+        { id: 'rpcs3', name: 'RPCS3', platform: 'PlayStation 3', args: '--no-gui --fullscreen "{rom}"', extensions: ['bin'] },
         { id: 'custom', name: 'Custom', platform: '', args: '"{rom}"', extensions: [] },
       ],
       system: { platform: 'win32', version: '2.0.0', electron: '45.3.3', chrome: '156', locale: window.DL_MOCK_LOCALE || 'en-US', languages: [window.DL_MOCK_LOCALE || 'en-US'], fullscreen: true, device },
@@ -174,7 +177,7 @@
     setSettings: async (patch) => {
       const clean = { ...patch };
       delete clean.secrets;
-      for (const k of ['steamApiKey', 'sgdbApiKey']) if (k in clean) { settings.secrets[k] = clean[k] ? `•••• ${clean[k].slice(-4)}` : ''; delete clean[k]; }
+      for (const k of ['steamApiKey', 'sgdbApiKey', 'xblApiKey']) if (k in clean) { settings.secrets[k] = clean[k] ? `•••• ${clean[k].slice(-4)}` : ''; delete clean[k]; }
       settings = { ...settings, ...clean, sources: { ...settings.sources, ...(clean.sources || {}) } };
       if (patch.sources) setTimeout(push, 200);
       if ('onlineMode' in clean) {
@@ -186,7 +189,7 @@
     },
     resetSettings: async () => ({ ...settings }),
     resetSettingsSection: async (section) => {
-      const d = { display: { uiSize: 'auto', showClock: true, clockFormat: 'auto', showDate: true, showBattery: true, showGameInfo: true, showLogos: true, showHeroArt: true, showStoreBadges: true, showSubscriptionBadges: true, homeOrder: 'recent', reduceMotion: false },
+      const d = { display: { uiSize: 'auto', showClock: true, clockFormat: 'auto', showDate: true, showBattery: true, showGameInfo: true, showLogos: true, showHeroArt: true, showStoreBadges: true, showSubscriptionBadges: true, homeOrder: 'recent', theme: 'game', reduceMotion: false },
         sound: { uiSounds: true, soundVolume: 70, music: 'builtin', musicSpeed: 'slowed', musicVolume: 35, pauseMusicWhilePlaying: true } }[section] || {};
       Object.assign(settings, d);
       return { ...settings };
@@ -224,7 +227,7 @@
       const g = games.find((x) => x.id === id);
       if (!g) return { error: 'notFound' };
       const i = games.indexOf(g);
-      if (g.screenshotSource === 'cemu') {
+      if (['cemu', 'dolphin', 'ppsspp', 'rpcs3'].includes(g.screenshotSource)) {
         const shots = Array.from({ length: 5 }, (_, k) => { const url = art(i * 5 + k + 40, 1920, 1080); return { id: `cemu-${k}`, kind: 'shot', full: url, thumb: url, time: now - k * 5 * 3600e3 }; });
         return { steam: false, cemu: true, screenshots: shots };
       }
@@ -243,7 +246,9 @@
       const shotCount = i % 3 === 2 ? 0 : (Number(window.DL_MOCK_SHOTS) || 14);
       const shots = Array.from({ length: shotCount }, (_, k) => {
         const url = art(i * 7 + k + 2, 1920, 1080);
-        return { id: `shot-${i}-${k}`, kind: 'shot', full: url, thumb: url, time: now - k * 3.7 * 3600e3 };
+        // DL_MOCK_SHOTURL: previews with the app's own addresses (to check the sizes asked for).
+        const thumb = window.DL_MOCK_SHOTURL ? `dl://shot/mock${i}x${k}?thumb=1` : url;
+        return { id: `shot-${i}-${k}`, kind: 'shot', full: url, thumb, time: now - k * 3.7 * 3600e3 };
       });
       // Clips: real Steam-style recordings served by dev/preview.js (DL_PREVIEW_STEAM), if any.
       let clips = [];
@@ -270,6 +275,7 @@
     },
     showScreenshotInFolder: ok,
     showClipInFolder: ok,
+    clipboardText: async () => ({ text: window.DL_MOCK_CLIP || '' }),
     clipManifest: async (id) => {
       try { const r = await fetch(`/__clips/manifest/${encodeURIComponent(id)}`); return r.ok ? r.json() : { error: 'notFound' }; } catch { return { error: 'read' }; }
     },

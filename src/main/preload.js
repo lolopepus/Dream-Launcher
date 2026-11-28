@@ -68,6 +68,7 @@ contextBridge.exposeInMainWorld('dl', {
   testSteam: () => invoke('steam:test'),
 
   openDataFolder: () => invoke('app:openDataFolder'),
+  clipboardText: () => invoke('app:clipboardText'),
   openExternal: (url) => invoke('app:openExternal', url),
   quit: () => invoke('app:quit'),
   minimize: () => invoke('app:minimize'),

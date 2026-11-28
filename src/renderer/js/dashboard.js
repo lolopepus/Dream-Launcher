@@ -594,16 +594,12 @@
     } else {
       show();
     }
+    // The cover's colour (used by the "Game colour" theme; fixed themes keep their own).
     const accentSrc = cover || hero;
     if (accentSrc) {
-      extractAccent(accentSrc, (rgb) => {
-        if (!rgb) return;
-        document.documentElement.style.setProperty('--accent', `${Math.round(rgb[0])}, ${Math.round(rgb[1])}, ${Math.round(rgb[2])}`);
-        DL.waves.setTint(rgb);
-      });
+      extractAccent(accentSrc, (rgb) => { if (rgb) DL.theme.setGameColor(rgb.map((v) => Math.round(v))); });
     } else {
-      document.documentElement.style.setProperty('--accent', '120, 104, 255');
-      DL.waves.setTint([120, 104, 255]);
+      DL.theme.setGameColor(null);
     }
   }
 
@@ -671,7 +667,7 @@
       let peek = 'hub.peek';
       if (game.source === 'steam') peek = online ? 'hub.peekSteam' : 'hub.peekSteamOffline';
       else if (game.source === 'xbox' && online) peek = 'hub.peekXbox';
-      else if (game.screenshotSource === 'cemu') peek = 'hub.peekCemu';
+      else if (['cemu', 'dolphin', 'ppsspp', 'rpcs3'].includes(game.screenshotSource)) peek = 'hub.peekCemu';
       right.appendChild(DL.glyphs.hint('down', DL.t(peek), () => openHub()));
     }
     renderPeek(game);

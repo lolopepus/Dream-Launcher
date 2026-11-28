@@ -36,8 +36,9 @@
   // Start-up: the ribbons are drawn in from left to right ("reveal" goes 0 -> 1).
   let reveal = 1;
   let revealStart = 0;
-  const cur = { ...MODES.intro, r: 185, g: 170, b: 255 };
-  let target = { ...MODES.intro, r: 185, g: 170, b: 255 };
+  // k: strength of the lines (colour themes: calmer on black and OLED black).
+  const cur = { ...MODES.intro, r: 185, g: 170, b: 255, k: 1 };
+  let target = { ...MODES.intro, r: 185, g: 170, b: 255, k: 1 };
 
   const S = () => DL.state.settings || {};
   /** Waves move: not with reduced motion or while a game is running. */
@@ -73,7 +74,7 @@
       const n = band.lines;
       for (let k = 0; k < n; k++) {
         const edge = Math.sin((Math.PI * k) / (n - 1));
-        g.globalAlpha = cur.alpha * ALPHA_FIX * band.weight * (0.12 + 0.88 * edge);
+        g.globalAlpha = cur.alpha * cur.k * ALPHA_FIX * band.weight * (0.12 + 0.88 * edge);
         g.beginPath();
         for (let x = -step; x <= w + step; x += step) {
           const xs = x / scale;
@@ -169,12 +170,15 @@
       target = { ...target, ...MODES[name] };
       start();
     },
-    setTint(rgb) {
+    /**
+     * Colour of the lines: the accent mixed with white (`white`: how much), drawn at `strength`.
+     */
+    setTint(rgb, { white = 0.45, strength = 1 } = {}) {
       if (!rgb) return;
-      // Keep the waves light: mix the accent colour with white.
-      target.r = Math.round(rgb[0] * 0.55 + 255 * 0.45);
-      target.g = Math.round(rgb[1] * 0.55 + 255 * 0.45);
-      target.b = Math.round(rgb[2] * 0.55 + 255 * 0.45);
+      target.r = Math.round(rgb[0] * (1 - white) + 255 * white);
+      target.g = Math.round(rgb[1] * (1 - white) + 255 * white);
+      target.b = Math.round(rgb[2] * (1 - white) + 255 * white);
+      target.k = strength;
       start();
     },
     /** Draws the ribbons in from the left (start-up animation). */

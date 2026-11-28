@@ -62,15 +62,43 @@
   }
 
   const THUMB_SIZES = [480, 640, 960, 1280, 1600];
+  // Emulators whose screenshots are shown, and the hint when there are none yet.
+  const EMU_SHOTS = ['cemu', 'dolphin', 'ppsspp', 'rpcs3'];
+  const NO_SHOTS = { cemu: 'hub.noShotsCemu', dolphin: 'hub.noShotsDolphin', ppsspp: 'hub.noShotsPpsspp', rpcs3: 'hub.noShotsRpcs3' };
   /**
-   * Screenshot previews are made by the app at the size they are shown (interface scale × pixel
-   * density), so they are sharp on any screen without loading full pictures.
+   * Screenshot previews are made by the app at the size they are shown, so they are sharp on any
+   * screen without loading full pictures. The size is measured once the tile is laid out: its
+   * width, or more if a tall tile crops the picture (it is zoomed to fill the tile), times the
+   * interface scale and the screen's pixel density.
    */
-  function sizedThumb(url, cssWidth) {
-    if (!url || !/^dl:\/\/shot\//.test(url)) return url;
-    const px = cssWidth * ((DL.stage && DL.stage.s) || 1) * (window.devicePixelRatio || 1);
-    const w = THUMB_SIZES.find((x) => x >= px) || THUMB_SIZES[THUMB_SIZES.length - 1];
-    return `${url}${url.includes('?') ? '&' : '?'}w=${w}`;
+  const isShotUrl = (url) => !!url && /^dl:\/\/shot\//.test(url);
+  const withWidth = (url, w) => `${url}${url.includes('?') ? '&' : '?'}w=${w}`;
+  function thumbWidthFor(width, height) {
+    const scale = ((DL.stage && DL.stage.s) || 1) * (window.devicePixelRatio || 1);
+    const need = Math.max(width, (height * 16) / 9) * scale;
+    return THUMB_SIZES.find((x) => x >= need) || THUMB_SIZES[THUMB_SIZES.length - 1];
+  }
+  const thumbObserver = typeof ResizeObserver === 'function' ? new ResizeObserver((entries) => {
+    for (const e of entries) {
+      const img = e.target;
+      const { width, height } = e.contentRect;
+      if (!width || !height) continue;
+      // Measured once (layout size, not affected by opening animations), then let go.
+      thumbObserver.unobserve(img);
+      img.src = withWidth(img.dataset.base, thumbWidthFor(width, height));
+    }
+  }) : null;
+
+  /** Picture element for a preview; screenshots get their size once the tile is laid out. */
+  function thumbImg(url, guessWidth) {
+    if (!isShotUrl(url)) return safeImg(url, '');
+    if (!thumbObserver) return safeImg(withWidth(url, thumbWidthFor(guessWidth, (guessWidth * 9) / 16)), '');
+    // No address until measured (an empty one would count as a broken picture).
+    const img = el('img', { attrs: { alt: '', decoding: 'async', draggable: 'false' } });
+    img.onerror = () => { if (img.getAttribute('src')) img.style.visibility = 'hidden'; };
+    img.dataset.base = url;
+    thumbObserver.observe(img);
+    return img;
   }
 
   /** Screenshots and clips of a game, newest first. */
@@ -83,7 +111,7 @@
   /** Picture of a screenshot or clip, with a play mark and length for clips. */
   function mediaThumb(item, cssWidth, cls) {
     const node = el('div', { class: `${cls} ${item.kind === 'clip' ? 'is-clip' : ''}` });
-    if (item.thumb) node.appendChild(safeImg(sizedThumb(item.thumb, cssWidth), ''));
+    if (item.thumb) node.appendChild(thumbImg(item.thumb, cssWidth));
     else node.appendChild(el('span', { class: 'media-noimg' }, item.kind === 'clip' ? null : DL.icon('image')));
     if (item.kind === 'clip') {
       node.appendChild(el('span', { class: 'media-play' }, DL.icon('play')));
@@ -269,7 +297,11 @@
     return node;
   }
 
-  function screenshotsCard(game, data) {
+  /**
+   * Screenshots and clips. Narrow card (three cards side by side): one wide picture with two below.
+   * Wide card: a big picture with two next to it and a row of three below. All tiles are 16:9.
+   */
+  function screenshotsCard(game, data, { wide = false } = {}) {
     const media = data ? mediaOf(data) : null;
     const items = media ? media.all : null;
     const node = card('screenshots', () => { if (items && items.length) openGallery(game, media); });
@@ -280,12 +312,12 @@
     if (!data) { body.appendChild(el('div', { class: 'hub-skel', style: { flex: '1' } })); return node; }
     if (!items.length) {
       body.appendChild(el('div', { class: 'shots-empty' },
-        el('div', {}, DL.icon('camera'), el('p', { class: 'hub-note', text: t(game.screenshotSource === 'cemu' ? 'hub.noShotsCemu' : 'hub.noShotsSteam') }))));
+        el('div', {}, DL.icon('camera'), el('p', { class: 'hub-note', text: t(NO_SHOTS[game.screenshotSource] || 'hub.noShotsSteam') }))));
       return node;
     }
-    const n = Math.min(3, items.length);
-    const mosaic = el('div', { class: `shots-mosaic ${n === 1 ? 'one' : n === 2 ? 'two' : ''}` });
-    items.slice(0, n).forEach((m, i) => mosaic.appendChild(mediaThumb(m, i === 0 ? 420 : 220, 'shot')));
+    const n = Math.min(wide ? 6 : 3, items.length);
+    const mosaic = el('div', { class: `shots-mosaic ${wide ? 'wide' : 'narrow'} n${n}` });
+    items.slice(0, n).forEach((m, i) => mosaic.appendChild(mediaThumb(m, i === 0 ? 500 : 250, 'shot')));
     body.appendChild(mosaic);
     node.appendChild(more(t('hub.showAll')));
     return node;
@@ -349,14 +381,14 @@
     const offline = DL.state.net.online === false || !!(data && data.offline);
     if (game.source === 'steam' && offline) {
       // Achievements and friends need the internet; screenshots are on this PC.
-      cards = [screenshotsCard(game, data), infoCard(game, data)];
+      cards = [screenshotsCard(game, data, { wide: true }), infoCard(game, data)];
       host.className = 'hub cols-2 offline';
     } else if (game.source === 'steam') {
       cards = [achievementsCard(game, data), friendsCard(game, data), screenshotsCard(game, data)];
       host.className = 'hub cols-3';
-    } else if (game.screenshotSource === 'cemu') {
-      // Cemu (Wii U): its screenshots, matched to this game by when it was played.
-      cards = [screenshotsCard(game, data), infoCard(game, data)];
+    } else if (EMU_SHOTS.includes(game.screenshotSource)) {
+      // Emulators with screenshots (Cemu, Dolphin, PPSSPP, RPCS3): its screenshots and game info.
+      cards = [screenshotsCard(game, data, { wide: true }), infoCard(game, data)];
       host.className = 'hub cols-2';
     } else if (game.source === 'xbox' && !offline) {
       cards = [achievementsCard(game, data), friendsCard(game, data), infoCard(game, data)];

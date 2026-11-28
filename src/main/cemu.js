@@ -126,7 +126,7 @@ async function readCemuPlaytime(exePath, env = process.env, now = Date.now()) {
 function isCemu(emu) {
   if (!emu) return false;
   if (emu.preset === 'cemu') return true;
-  return /^cemu[^\\/]*\.exe$/i.test(path.basename(String(emu.exe || '')));
+  return /^cemu[^\\/]*\.exe$/i.test(String(emu.exe || '').split(/[\\/]/).pop());
 }
 
 // ---------------------------------------------------------------- screenshots
